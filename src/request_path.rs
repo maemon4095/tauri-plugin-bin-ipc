@@ -5,6 +5,7 @@ pub enum RequestPath {
     Pop { id: usize, key: u32 },
     CloseDown { id: usize, key: u32 },
     CloseUp { id: usize, key: u32 },
+    Close { id: usize, key: u32 },
     Connect,
     Disconnect { id: usize, key: u32 },
 }
@@ -37,6 +38,7 @@ fn path_with_key(s: &str) -> Result<RequestPath, RequestPathError> {
         "pop" => RequestPath::Pop { id, key },
         "close/down" => RequestPath::CloseDown { id, key },
         "close/up" => RequestPath::CloseUp { id, key },
+        "close" => RequestPath::Close { id, key },
         "disconnect" => RequestPath::Disconnect { id, key },
         _ => return Err(RequestPathError),
     };

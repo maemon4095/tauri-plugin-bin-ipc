@@ -1,7 +1,8 @@
 {
   "build": {
-    "devPath": "../src",
-    "distDir": "../src",
+    "beforeDevCommand": "deno task dev",
+    "devPath": "http://localhost:1415",
+    "distDir": "../dist",
     "withGlobalTauri": true
   },
   "package": {
@@ -14,6 +15,9 @@
       "shell": {
         "all": false,
         "open": true
+      },
+      "os": {
+        "all": true
       }
     },
     "windows": [

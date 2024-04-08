@@ -1,6 +1,8 @@
 import { type as ostype } from "@tauri-apps/api/os";
 import { InterruptibleLock as Lock } from "https://raw.githubusercontent.com/maemon4095/ts_components/release/v0.3.0/lock/mod.ts";
 import { listen } from "@tauri-apps/api/event";
+import { Connection } from "./connection.ts";
+export type { Connection };
 
 const BIN_IPC_EVENT_NAME = "bin-ipc-signal";
 type BinPicEventType = "ready-to-pop" | "disconnect";
@@ -38,7 +40,7 @@ async function resolveBinaryChannel(scheme: string) {
         case "Linux":
             return `${scheme}://localhost`;
         case "Windows_NT":
-            return `$https://${scheme}.localhost`;
+            return `https://${scheme}.localhost`;
     }
 }
 
@@ -54,7 +56,7 @@ async function handshake(host: string) {
     return js as { id: number, key: number; };
 }
 
-export async function connect(scheme: string) {
+export async function connect(scheme: string): Promise<Connection> {
     const host = await resolveBinaryChannel(scheme);
     const { id, key } = await handshake(host);
     const channel = `${host}/${id}/${key}`;
@@ -62,15 +64,16 @@ export async function connect(scheme: string) {
     const pushURL = `${channel}/push`;
     const closeUpstreamURL = `${channel}/close/up`;
     const closeDownstreamURL = `${channel}/close/down`;
+    const closeURL = `${channel}/close`;
     const disconnectURL = `${channel}/disconnect`;
     const listener = {} as BinIpcEventListener;
-    const channels = listeners[scheme];
+    const channels = listeners[scheme] ??= {};
     channels[id] = listener as BinIpcEventListener;
 
     const upstreamAbortController = new AbortController();
-    let disconnected = false;
+    let closed = false;
     listener.disconnect = async () => {
-        disconnected = true;
+        closed = true;
         upstreamAbortController.abort();
         delete channels[id];
         await fetch(disconnectURL, { method: "POST" });
@@ -79,7 +82,7 @@ export async function connect(scheme: string) {
     const upstreamLock = new Lock();
     const upstream = new WritableStream({
         async write(chunk, controller) {
-            if (disconnected) {
+            if (closed) {
                 controller.error();
                 return;
             }
@@ -180,6 +183,15 @@ export async function connect(scheme: string) {
         },
     });
 
+    function close() {
+        closed = true;
+        upstreamLock.acquire();
+        downstreamLock.acquire();
+        fetch(closeURL, { method: "POST" }).finally(() => {
+            upstreamLock.release();
+            downstreamLock.release();
+        });
+    }
 
-    return { id, upstream, downstream };
+    return { writable: upstream, readable: downstream, close };
 }

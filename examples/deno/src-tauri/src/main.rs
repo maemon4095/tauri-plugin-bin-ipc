@@ -1,21 +1,32 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+use futures::{SinkExt, StreamExt};
+use tauri::AppHandle;
+use tauri_plugin_bin_ipc::{Receiver, Sender};
 
 fn main() {
     tauri::Builder::default()
-        .register_uri_scheme_protocol("aaa.bin-ipc", |_, req| {
-            println!("{:?}", req);
-            tauri::http::ResponseBuilder::new()
-                .header(tauri::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-                .body(Vec::new())
-        })
-        .invoke_handler(tauri::generate_handler![greet])
+        .plugin(
+            tauri_plugin_bin_ipc::Builder::new()
+                .register_bin_ipc_protocol(
+                    "bin-ipc",
+                    |_app: &AppHandle, mut tx: Sender, mut rx: Receiver| async move {
+                        let reason = loop {
+                            let Some(buf) = rx.next().await else {
+                                break "closeup";
+                            };
+                            match tx.send(buf).await {
+                                Ok(()) => (),
+                                Err(_) => break "closedown",
+                            }
+                        };
+
+                        println!("server close {:?}", reason)
+                    },
+                )
+                .build(),
+        )
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
