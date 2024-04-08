@@ -1,31 +1,57 @@
 use tauri::{AppHandle, Manager};
 
 pub static BIN_IPC_EVENT_NAME: &str = "bin-ipc-signal";
-
-pub struct EventEmitter<R: tauri::Runtime> {
-    scheme: String,
-    app_handle: AppHandle<R>,
+pub struct EventEmitter<'a> {
+    scheme: &'a str,
+    id: usize,
 }
 
-impl<R: tauri::Runtime> EventEmitter<R> {
-    pub fn new(scheme: String, app_handle: AppHandle<R>) -> Self {
-        Self { scheme, app_handle }
+impl<'a> EventEmitter<'a> {
+    pub fn new(scheme: &'a str, id: usize) -> Self {
+        Self { scheme, id }
     }
 
-    pub fn emit_ready(&self) -> Result<(), tauri::Error> {
-        self.app_handle.emit_all(
+    fn emit<R: tauri::Runtime>(
+        &self,
+        app_handle: &AppHandle<R>,
+        ty: IpcEventType,
+    ) -> Result<(), tauri::Error> {
+        app_handle.emit_all(
             BIN_IPC_EVENT_NAME,
-            IpcEvent::ReadyToPop {
+            IpcEvent {
+                ty,
                 scheme: &self.scheme,
+                id: self.id,
             },
         )
+    }
+
+    pub fn emit_ready<R: tauri::Runtime>(
+        &self,
+        app_handle: &AppHandle<R>,
+    ) -> Result<(), tauri::Error> {
+        self.emit(app_handle, IpcEventType::ReadyToPop)
+    }
+
+    pub fn emit_disconnect<R: tauri::Runtime>(
+        &self,
+        app_handle: &AppHandle<R>,
+    ) -> Result<(), tauri::Error> {
+        self.emit(app_handle, IpcEventType::Disconnect)
     }
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
-#[serde(tag = "type")]
-pub enum IpcEvent<'a> {
-    ReadyToPop { scheme: &'a str },
+enum IpcEventType {
+    ReadyToPop,
     Disconnect,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+struct IpcEvent<'a> {
+    #[serde(rename = "type")]
+    ty: IpcEventType,
+    scheme: &'a str,
+    id: usize,
 }

@@ -29,8 +29,4 @@ impl ConnectionBag {
     pub fn connections_mut(&self) -> impl '_ + DerefMut<Target = VecPigeonhole<Mutex<Connection>>> {
         self.0.write().unwrap()
     }
-
-    pub fn insert(&self, c: Connection) -> usize {
-        self.connections_mut().insert(Mutex::new(c))
-    }
 }

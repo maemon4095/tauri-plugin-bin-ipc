@@ -1,29 +1,31 @@
+use crate::connection::Connection;
 use crate::connection::ConnectionBag;
 use crate::event_emitter::EventEmitter;
 use crate::listener::{Listener, ListenerBox};
-use crate::Body;
-use crate::{channel_credentials::ChannelCredentials, connection::Connection};
-use futures::channel::mpsc::{Receiver, Sender};
 use pigeonhole::VecPigeonhole;
 use rand::RngCore;
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use std::ops::{Deref, DerefMut};
-use std::sync::Mutex;
-use tauri::async_runtime::JoinHandle;
-use tauri::AppHandle;
+use std::sync::{Arc, Mutex};
 
 pub struct State<R: tauri::Runtime> {
-    pub emitter: EventEmitter<R>,
+    pub scheme: Arc<String>,
     pub listener: ListenerBox<R>,
     pub rng: Mutex<Box<dyn RngCore + Send + Sync>>,
     pub bag: ConnectionBag,
 }
 
 impl<R: tauri::Runtime> State<R> {
-    pub fn new<L: Listener<R>>(scheme: String, app_handle: AppHandle<R>, listener: L) -> Self {
+    pub fn new<L: Listener<R>>(scheme: String, listener: L) -> Self {
+        let scheme = Arc::new(scheme);
         Self {
-            emitter: EventEmitter::new(scheme, app_handle),
-            listener: ListenerBox::new(listener),
+            scheme: Arc::clone(&scheme),
+            listener: ListenerBox::new(
+                move |app, id, _r| {
+                    EventEmitter::new(&scheme, id).emit_disconnect(app).unwrap();
+                },
+                listener,
+            ),
             rng: Mutex::new(Box::new(rand::rngs::StdRng::from_entropy())),
             bag: ConnectionBag::new(),
         }
@@ -41,24 +43,7 @@ impl<R: tauri::Runtime> State<R> {
         self.rng.lock().unwrap()
     }
 
-    pub fn connect(
-        &self,
-        client_tx: Sender<Body>,
-        client_rx: Receiver<Body>,
-        handle: JoinHandle<()>,
-    ) -> ChannelCredentials {
-        let key = self.rng().gen();
-        let id = self.bag.insert(Connection {
-            key,
-            tx: client_tx,
-            rx: client_rx,
-            handle,
-        });
-
-        ChannelCredentials { id, key }
-    }
-
-    fn close(&self, id: usize) -> Result<Connection, ()> {
+    pub fn close(&self, id: usize) -> Result<Connection, ()> {
         self.connections_mut()
             .remove(id)
             .map(|m| m.into_inner().unwrap())

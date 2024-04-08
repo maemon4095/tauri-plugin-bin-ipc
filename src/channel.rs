@@ -1,11 +1,11 @@
-use std::pin::Pin;
-
 use futures::channel::mpsc;
+use std::pin::Pin;
+use std::sync::Arc;
 
 use crate::{error::BoxError, Body};
 
 pub fn channel(
-    on_send: impl 'static + Fn() -> Result<(), BoxError>,
+    on_send: impl 'static + Send + Sync + Fn() -> Result<(), BoxError>,
     upbuf: usize,
     downbuf: usize,
 ) -> (
@@ -16,7 +16,7 @@ pub fn channel(
     let (client_tx, rx) = mpsc::channel(upbuf);
 
     let tx = Sender {
-        on_send: Box::new(on_send),
+        on_send: Arc::new(on_send),
         sender: tx,
     };
     let rx = Receiver { receiver: rx };
@@ -24,9 +24,16 @@ pub fn channel(
     ((tx, rx), (client_tx, client_rx))
 }
 
+#[derive(Clone)]
 pub struct Sender {
-    on_send: Box<dyn Fn() -> Result<(), BoxError>>,
+    on_send: Arc<dyn 'static + Send + Sync + Fn() -> Result<(), BoxError>>,
     sender: mpsc::Sender<Body>,
+}
+
+impl Sender {
+    pub fn close_channel(&mut self) {
+        self.sender.close_channel()
+    }
 }
 
 impl futures::Sink<Body> for Sender {

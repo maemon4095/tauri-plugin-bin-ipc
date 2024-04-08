@@ -1,17 +1,12 @@
 use crate::error::RequestPathError;
 
-pub struct RequestPath {
-    pub ty: RequestType,
-    pub id: usize,
-    pub key: u32,
-}
-
-pub enum RequestType {
-    Push,
-    Pop,
-    CloseDown,
-    CloseUp,
+pub enum RequestPath {
+    Push { id: usize, key: u32 },
+    Pop { id: usize, key: u32 },
+    CloseDown { id: usize, key: u32 },
+    CloseUp { id: usize, key: u32 },
     Connect,
+    Disconnect { id: usize, key: u32 },
 }
 
 impl std::str::FromStr for RequestPath {
@@ -22,25 +17,38 @@ impl std::str::FromStr for RequestPath {
             return Err(RequestPathError);
         };
 
-        let Some((id, s)) = s.split_once('/') else {
-            return Err(RequestPathError);
-        };
-
-        let Some((key, method)) = s.split_once('/') else {
-            return Err(RequestPathError);
-        };
-
-        let id = id.parse().map_err(|_| RequestPathError)?;
-        let key = key.parse().map_err(|_| RequestPathError)?;
-        let ty = match method {
-            "push" => RequestType::Push,
-            "pop" => RequestType::Pop,
-            "close/down" => RequestType::CloseDown,
-            "close/up" => RequestType::CloseUp,
-            "connect" => RequestType::Connect,
-            _ => return Err(RequestPathError),
-        };
-
-        Ok(Self { ty, id, key })
+        path_with_key(s).or_else(|_| path_connect(s))
     }
+}
+
+fn path_with_key(s: &str) -> Result<RequestPath, RequestPathError> {
+    let Some((id, s)) = s.split_once('/') else {
+        return Err(RequestPathError);
+    };
+    let id = id.parse().map_err(|_| RequestPathError)?;
+
+    let Some((key, method)) = s.split_once('/') else {
+        return Err(RequestPathError);
+    };
+    let key = key.parse().map_err(|_| RequestPathError)?;
+
+    let p = match method {
+        "push" => RequestPath::Push { id, key },
+        "pop" => RequestPath::Pop { id, key },
+        "close/down" => RequestPath::CloseDown { id, key },
+        "close/up" => RequestPath::CloseUp { id, key },
+        "disconnect" => RequestPath::Disconnect { id, key },
+        _ => return Err(RequestPathError),
+    };
+
+    Ok(p)
+}
+
+fn path_connect(s: &str) -> Result<RequestPath, RequestPathError> {
+    let p = match s {
+        "connect" => RequestPath::Connect,
+        _ => return Err(RequestPathError),
+    };
+
+    Ok(p)
 }

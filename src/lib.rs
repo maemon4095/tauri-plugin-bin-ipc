@@ -7,26 +7,33 @@ mod listener;
 mod request_path;
 mod state;
 
+use std::sync::{Arc, Mutex};
+
+use channel_credentials::ChannelCredentials;
+use connection::Connection;
 use error::{InvalidMethodError, RequestPathError};
+use event_emitter::EventEmitter;
 use futures::SinkExt;
-use request_path::{RequestPath, RequestType};
+use rand::Rng;
+use request_path::RequestPath;
 use state::State;
 use tauri::{
     async_runtime,
     http::{self, status::StatusCode, Request, Response},
     plugin::{Builder, TauriPlugin},
-    AppHandle, Manager, Runtime,
+    AppHandle, Runtime,
 };
 
 type Body = Vec<u8>;
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    let state: State<R> = State::new(|app: &AppHandle<R>, tx, rx| {
+    let scheme = "bin-ipc";
+    let state: State<R> = State::new(scheme.to_string(), |app: &AppHandle<R>, tx, rx| {
         tauri::async_runtime::spawn(async { Ok::<(), ()>(()) })
     });
 
     Builder::new("bin-ipc")
-        .register_uri_scheme_protocol("bin-ipc", move |app_handle, req| {
+        .register_uri_scheme_protocol(scheme, move |app_handle, req| {
             if req.method() != http::method::Method::POST {
                 return Err(InvalidMethodError.into());
             }
@@ -34,21 +41,27 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             let uri: http::Uri = req.uri().parse()?;
             let path: RequestPath = uri.path().parse()?;
             let connections = state.connections();
-            let connection = connections.get(path.id).ok_or(RequestPathError)?;
-            let mut connection = connection.lock().unwrap();
-            if connection.key != path.key {
-                return Err(RequestPathError.into());
-            }
             let body = req.body();
-            match path.ty {
-                RequestType::Push => {
+            match path {
+                RequestPath::Push { id, key } => {
+                    let connection = connections.get(id).ok_or(RequestPathError)?;
+                    let mut connection = connection.lock().unwrap();
+                    if connection.key != key {
+                        return Err(RequestPathError.into());
+                    }
                     let body = body.clone();
                     async_runtime::block_on(async { connection.tx.send(body).await })?;
                     any_origin_response()
                         .status(StatusCode::OK)
                         .body(Vec::new())
                 }
-                RequestType::Pop => {
+                RequestPath::Pop { id, key } => {
+                    let connection = connections.get(id).ok_or(RequestPathError)?;
+                    let mut connection = connection.lock().unwrap();
+                    if connection.key != key {
+                        return Err(RequestPathError.into());
+                    }
+
                     let result = connection.rx.try_next();
                     match result {
                         Ok(Some(body)) => any_origin_response().status(StatusCode::OK).body(body),
@@ -60,15 +73,36 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                             .body(Vec::new()),
                     }
                 }
-                RequestType::CloseDown => {
+                RequestPath::CloseDown { id, key } => {
+                    let connection = connections.get(id).ok_or(RequestPathError)?;
+                    let mut connection = connection.lock().unwrap();
+                    if connection.key != key {
+                        return Err(RequestPathError.into());
+                    }
+
                     connection.rx.close();
                     any_origin_response().body(Vec::new())
                 }
-                RequestType::CloseUp => {
+
+                RequestPath::CloseUp { id, key } => {
+                    let connection = connections.get(id).ok_or(RequestPathError)?;
+                    let mut connection = connection.lock().unwrap();
+                    if connection.key != key {
+                        return Err(RequestPathError.into());
+                    }
+
                     connection.tx.close_channel();
                     any_origin_response().body(Vec::new())
                 }
-                RequestType::Connect => handshake(app_handle, &state, req),
+                RequestPath::Connect => handshake(app_handle, &state, req),
+                RequestPath::Disconnect { id, key } => {
+                    let connection = connections.get(id).ok_or(RequestPathError)?;
+                    let connection = connection.lock().unwrap();
+                    if connection.key != key {
+                        return Err(RequestPathError.into());
+                    }
+                    cleanup(app_handle, &state, id, req)
+                }
             }
         })
         .build()
@@ -83,12 +117,39 @@ fn handshake<R: Runtime>(
     state: &State<R>,
     _req: &Request,
 ) -> Result<Response, Box<(dyn std::error::Error)>> {
-    let (server, client) = channel::channel(|| Ok(()), 32, 32);
+    let mut connections = state.connections_mut();
+    let key = state.rng().gen();
+    let reservation = connections.reserve();
+    let id = reservation.id();
+    let on_send = {
+        let app = app_handle.clone();
+        let scheme = Arc::clone(&state.scheme);
+        move || {
+            let emitter = EventEmitter::new(&scheme, id);
+            emitter.emit_ready(&app).map_err(Into::into)
+        }
+    };
+    let (server, client) = channel::channel(on_send, 32, 32);
+    let handle = state.listener.listen(app_handle, id, server.0, server.1);
+    reservation.set(Mutex::new(Connection {
+        key,
+        handle,
+        tx: client.0,
+        rx: client.1,
+    }));
 
-    let handle = state.listener.listen(app_handle, server.0, server.1);
-    let credentials = state.connect(client.0, client.1, handle);
-
+    let credentials = ChannelCredentials { key, id };
     return any_origin_response()
         .status(StatusCode::OK)
         .body(serde_json::to_vec(&credentials)?);
+}
+
+fn cleanup<R: tauri::Runtime>(
+    _app_handle: &AppHandle<R>,
+    state: &State<R>,
+    id: usize,
+    _req: &Request,
+) -> Result<Response, Box<(dyn std::error::Error)>> {
+    state.close(id).unwrap();
+    return any_origin_response().body(Vec::new());
 }

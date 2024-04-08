@@ -5,15 +5,31 @@ import { listen } from "@tauri-apps/api/event";
 const BIN_IPC_EVENT_NAME = "bin-ipc-signal";
 type BinPicEventType = "ready-to-pop" | "disconnect";
 const readyToPopListeners = {} as { [id: number]: undefined | (() => void) | (() => Promise<unknown>); };
-await listen<{ type: BinPicEventType; scheme: string; }>(BIN_IPC_EVENT_NAME, e => {
-    const { type, scheme } = e.payload;
-    switch (type) {
-        case "ready-to-pop":
+type BinIpcEventHandler = (() => unknown) | (() => Promise<unknown>);
+type BinIpcEventListener = {
+    readyToPop: BinIpcEventHandler;
+    disconnect: BinIpcEventHandler;
+};
 
-        case "disconnect":
+const listeners = {} as {
+    [scheme: string]: {
+        [id: number]: BinIpcEventListener;
+    };
+};
+
+await listen<{ type: BinPicEventType; scheme: string; id: number; }>(BIN_IPC_EVENT_NAME, e => {
+    const { type, scheme, id } = e.payload;
+    switch (type) {
+        case "ready-to-pop": {
+            listeners[scheme][id].readyToPop();
+            break;
+        }
+        case "disconnect": {
+            listeners[scheme][id].disconnect();
+            break;
+        }
     }
 });
-
 
 async function resolveBinaryChannel(scheme: string) {
     const type = await ostype();
@@ -37,8 +53,7 @@ async function handshake(host: string) {
     }
     return js as { id: number, key: number; };
 }
-// serverがcloseした場合はexception.
-// 
+
 export async function connect(scheme: string) {
     const host = await resolveBinaryChannel(scheme);
     const { id, key } = await handshake(host);
@@ -47,14 +62,31 @@ export async function connect(scheme: string) {
     const pushURL = `${channel}/push`;
     const closeUpstreamURL = `${channel}/close/up`;
     const closeDownstreamURL = `${channel}/close/down`;
+    const disconnectURL = `${channel}/disconnect`;
+    const listener = {} as BinIpcEventListener;
+    const channels = listeners[scheme];
+    channels[id] = listener as BinIpcEventListener;
+
+    const upstreamAbortController = new AbortController();
+    let disconnected = false;
+    listener.disconnect = async () => {
+        disconnected = true;
+        upstreamAbortController.abort();
+        delete channels[id];
+        await fetch(disconnectURL, { method: "POST" });
+    };
 
     const upstreamLock = new Lock();
     const upstream = new WritableStream({
         async write(chunk, controller) {
+            if (disconnected) {
+                controller.error();
+                return;
+            }
             try {
                 await upstreamLock.acquire();
                 await fetch(pushURL, {
-                    signal: controller.signal,
+                    signal: AbortSignal.any([controller.signal, upstreamAbortController.signal]),
                     method: "POST",
                     body: chunk,
                 });
@@ -90,7 +122,13 @@ export async function connect(scheme: string) {
     const downstream = new ReadableStream({
         type: "bytes",
         start(controller) {
-            readyToPopListeners[id] = async () => {
+            const discon = listener.disconnect;
+            listener.disconnect = async () => {
+                controller.close();
+                await discon();
+            };
+
+            listener.readyToPop = async () => {
                 try {
                     await downstreamLock.acquire();
                     const res = await fetch(popURL, {
@@ -127,7 +165,6 @@ export async function connect(scheme: string) {
                 } finally {
                     downstreamLock.release();
                 }
-
             };
         },
         async cancel() {
@@ -142,6 +179,7 @@ export async function connect(scheme: string) {
             }
         },
     });
+
 
     return { id, upstream, downstream };
 }
