@@ -1,3 +1,4 @@
+mod bin_ipc_stream;
 mod channel;
 mod channel_credentials;
 mod connection;
@@ -14,6 +15,7 @@ use tauri::{
     Runtime,
 };
 
+pub use bin_ipc_stream::BinIpcStream;
 pub use channel::{Receiver, Sender};
 pub use plugin_builder_bin_ipc_extension::PluginBuilderBinIpcExtension;
 

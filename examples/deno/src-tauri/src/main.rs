@@ -3,7 +3,7 @@
 
 use futures::{SinkExt, StreamExt};
 use tauri::AppHandle;
-use tauri_plugin_bin_ipc::{Receiver, Sender};
+use tauri_plugin_bin_ipc::BinIpcStream;
 
 fn main() {
     tauri::Builder::default()
@@ -11,13 +11,13 @@ fn main() {
             tauri_plugin_bin_ipc::Builder::new()
                 .register_bin_ipc_protocol(
                     "bin-ipc",
-                    |_app: &AppHandle, mut tx: Sender, mut rx: Receiver| async move {
+                    |_app: &AppHandle, mut stream: BinIpcStream| async move {
                         let reason = loop {
-                            let Some(buf) = rx.next().await else {
+                            let Some(buf) = stream.next().await else {
                                 break "close upstream".into();
                             };
 
-                            if let Err(e) = tx.send(buf).await {
+                            if let Err(e) = stream.send(buf).await {
                                 break format!("close downstream: {}", e);
                             }
                         };

@@ -1,4 +1,7 @@
-use crate::channel::{Receiver, Sender};
+use crate::{
+    bin_ipc_stream::BinIpcStream,
+    channel::{Receiver, Sender},
+};
 use std::{
     future::{Future, IntoFuture},
     sync::Arc,
@@ -8,19 +11,19 @@ use tauri::{async_runtime::JoinHandle, AppHandle};
 pub trait Listener<R: tauri::Runtime>: 'static + Send + Sync {
     type Future: Future + Send;
 
-    fn listen(&self, app_handle: &AppHandle<R>, tx: Sender, rx: Receiver) -> Self::Future;
+    fn listen(&self, app_handle: &AppHandle<R>, stream: BinIpcStream) -> Self::Future;
 }
 
 impl<R, Fut, F> Listener<R> for F
 where
     R: tauri::Runtime,
-    F: 'static + Send + Sync + for<'a> Fn(&'a AppHandle<R>, Sender, Receiver) -> Fut,
+    F: 'static + Send + Sync + for<'a> Fn(&'a AppHandle<R>, BinIpcStream) -> Fut,
     Fut: Future + Send,
 {
     type Future = Fut;
 
-    fn listen(&self, app_handle: &AppHandle<R>, tx: Sender, rx: Receiver) -> Self::Future {
-        self(app_handle, tx, rx)
+    fn listen(&self, app_handle: &AppHandle<R>, stream: BinIpcStream) -> Self::Future {
+        self(app_handle, stream)
     }
 }
 
@@ -45,7 +48,12 @@ impl<R: tauri::Runtime> ListenerBox<R> {
                 let listener = Arc::clone(&listener);
                 tauri::async_runtime::spawn(async move {
                     let mut tx_clone = tx.clone();
-                    let result = listener.listen(&app, tx, rx).await;
+                    let stream = BinIpcStream {
+                        id,
+                        sender: tx,
+                        receiver: rx,
+                    };
+                    let result = listener.listen(&app, stream).await;
                     tx_clone.close_channel();
                     on_close(&app, id, result);
                 })
