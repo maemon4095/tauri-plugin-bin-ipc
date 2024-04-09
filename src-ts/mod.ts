@@ -59,7 +59,6 @@ async function handshake(host: string) {
 export async function connect(scheme: string): Promise<Connection> {
     const host = await resolveBinaryChannel(scheme);
     const { id, key } = await handshake(host);
-    console.log("connected:", { id, key });
     const channel = `${host}/${id}/${key}`;
     const popURL = `${channel}/pop`;
     const pushURL = `${channel}/push`;
