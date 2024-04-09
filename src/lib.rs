@@ -48,7 +48,15 @@ impl<R: Runtime> Default for Builder<R> {
         Self::new()
     }
 }
-
+/// TODO: TcpListenerと同じInterface
+/// ```rust
+/// let listener = bind(80).await?;
+/// let conn = listener.accept().await?;
+/// ```
+///
+/// ```ts
+/// const conn = await connect({ port: 80 });
+/// ```
 impl<R: Runtime> Builder<R> {
     pub fn new() -> Self {
         Self { inits: Vec::new() }
@@ -116,7 +124,7 @@ impl<R: Runtime> Builder<R> {
                         any_origin_response().body(Vec::new())
                     }
                     RequestPath::Connect => handshake(app_handle, &state, req),
-                    RequestPath::Disconnect { id, key } => {
+                    RequestPath::CleanUp { id, key } => {
                         {
                             // key validation
                             let connections = state.connections();

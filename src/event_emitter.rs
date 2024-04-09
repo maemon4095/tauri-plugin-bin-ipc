@@ -33,19 +33,20 @@ impl<'a> EventEmitter<'a> {
         self.emit(app_handle, IpcEventType::ReadyToPop)
     }
 
-    pub fn emit_disconnect<R: tauri::Runtime>(
+    pub fn emit_cleanup<R: tauri::Runtime>(
         &self,
         app_handle: &AppHandle<R>,
     ) -> Result<(), tauri::Error> {
-        self.emit(app_handle, IpcEventType::Disconnect)
+        self.emit(app_handle, IpcEventType::CleanUp)
     }
 }
 
 #[derive(serde::Serialize, Debug, Clone)]
-#[serde(rename_all = "kebab-case")]
 enum IpcEventType {
+    #[serde(rename = "ready-to-pop")]
     ReadyToPop,
-    Disconnect,
+    #[serde(rename = "cleanup")]
+    CleanUp,
 }
 
 #[derive(serde::Serialize, Debug, Clone)]

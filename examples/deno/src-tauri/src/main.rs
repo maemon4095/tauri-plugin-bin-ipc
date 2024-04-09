@@ -14,11 +14,11 @@ fn main() {
                     |_app: &AppHandle, mut tx: Sender, mut rx: Receiver| async move {
                         let reason = loop {
                             let Some(buf) = rx.next().await else {
-                                break "closeup";
+                                break "close upstream".into();
                             };
-                            match tx.send(buf).await {
-                                Ok(()) => (),
-                                Err(_) => break "closedown",
+
+                            if let Err(e) = tx.send(buf).await {
+                                break format!("close downstream: {}", e);
                             }
                         };
 

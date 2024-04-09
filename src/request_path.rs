@@ -7,7 +7,7 @@ pub enum RequestPath {
     CloseUp { id: usize, key: u32 },
     Close { id: usize, key: u32 },
     Connect,
-    Disconnect { id: usize, key: u32 },
+    CleanUp { id: usize, key: u32 },
 }
 
 impl std::str::FromStr for RequestPath {
@@ -39,7 +39,7 @@ fn path_with_key(s: &str) -> Result<RequestPath, RequestPathError> {
         "close/down" => RequestPath::CloseDown { id, key },
         "close/up" => RequestPath::CloseUp { id, key },
         "close" => RequestPath::Close { id, key },
-        "disconnect" => RequestPath::Disconnect { id, key },
+        "cleanup" => RequestPath::CleanUp { id, key },
         _ => return Err(RequestPathError),
     };
 

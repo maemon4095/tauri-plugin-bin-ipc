@@ -5,12 +5,12 @@ import { Connection } from "./connection.ts";
 export type { Connection };
 
 const BIN_IPC_EVENT_NAME = "bin-ipc-signal";
-type BinPicEventType = "ready-to-pop" | "disconnect";
+type BinPicEventType = "ready-to-pop" | "cleanup";
 const readyToPopListeners = {} as { [id: number]: undefined | (() => void) | (() => Promise<unknown>); };
 type BinIpcEventHandler = (() => unknown) | (() => Promise<unknown>);
 type BinIpcEventListener = {
     readyToPop: BinIpcEventHandler;
-    disconnect: BinIpcEventHandler;
+    cleanup: BinIpcEventHandler;
 };
 
 const listeners = {} as {
@@ -26,8 +26,8 @@ await listen<{ type: BinPicEventType; scheme: string; id: number; }>(BIN_IPC_EVE
             listeners[scheme][id].readyToPop();
             break;
         }
-        case "disconnect": {
-            listeners[scheme][id].disconnect();
+        case "cleanup": {
+            listeners[scheme][id].cleanup();
             break;
         }
     }
@@ -59,24 +59,25 @@ async function handshake(host: string) {
 export async function connect(scheme: string): Promise<Connection> {
     const host = await resolveBinaryChannel(scheme);
     const { id, key } = await handshake(host);
+    console.log("connected:", { id, key });
     const channel = `${host}/${id}/${key}`;
     const popURL = `${channel}/pop`;
     const pushURL = `${channel}/push`;
     const closeUpstreamURL = `${channel}/close/up`;
     const closeDownstreamURL = `${channel}/close/down`;
     const closeURL = `${channel}/close`;
-    const disconnectURL = `${channel}/disconnect`;
+    const cleanupURL = `${channel}/cleanup`;
     const listener = {} as BinIpcEventListener;
     const channels = listeners[scheme] ??= {};
     channels[id] = listener as BinIpcEventListener;
 
     const upstreamAbortController = new AbortController();
     let closed = false;
-    listener.disconnect = async () => {
+    listener.cleanup = async () => {
         closed = true;
         upstreamAbortController.abort();
         delete channels[id];
-        await fetch(disconnectURL, { method: "POST" });
+        await fetch(cleanupURL, { method: "POST" });
     };
 
     const upstreamLock = new Lock();
@@ -125,10 +126,10 @@ export async function connect(scheme: string): Promise<Connection> {
     const downstream = new ReadableStream({
         type: "bytes",
         start(controller) {
-            const discon = listener.disconnect;
-            listener.disconnect = async () => {
+            const clean = listener.cleanup;
+            listener.cleanup = async () => {
                 controller.close();
-                await discon();
+                await clean();
             };
 
             listener.readyToPop = async () => {

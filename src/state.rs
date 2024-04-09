@@ -22,7 +22,7 @@ impl<R: tauri::Runtime> State<R> {
             scheme: Arc::clone(&scheme),
             listener: ListenerBox::new(
                 move |app, id, _r| {
-                    EventEmitter::new(&scheme, id).emit_disconnect(app).unwrap();
+                    EventEmitter::new(&scheme, id).emit_cleanup(app).unwrap();
                 },
                 listener,
             ),
