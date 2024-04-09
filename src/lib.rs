@@ -26,6 +26,18 @@ use tauri::{
 
 pub use channel::{Receiver, Sender};
 
+type Body = Vec<u8>;
+
+// TODO: TcpListenerと同じInterfaceを加える。
+// ```rust
+// let listener = bind(80).await?;
+// let conn = listener.accept().await?;
+// ```
+//
+// ```ts
+// const conn = await connect({ port: 80 });
+// ```
+
 macro_rules! get_connection_into {
     ($c: ident; $id:ident, $key: ident -> $v: ident) => {
         let $v = $c.get($id).ok_or(RequestPathError)?;
@@ -37,8 +49,6 @@ macro_rules! get_connection_into {
     };
 }
 
-type Body = Vec<u8>;
-
 pub struct Builder<R: Runtime> {
     inits: Vec<Box<dyn FnOnce(PluginBuilder<R>) -> PluginBuilder<R>>>,
 }
@@ -48,15 +58,7 @@ impl<R: Runtime> Default for Builder<R> {
         Self::new()
     }
 }
-/// TODO: TcpListenerと同じInterface
-/// ```rust
-/// let listener = bind(80).await?;
-/// let conn = listener.accept().await?;
-/// ```
-///
-/// ```ts
-/// const conn = await connect({ port: 80 });
-/// ```
+
 impl<R: Runtime> Builder<R> {
     pub fn new() -> Self {
         Self { inits: Vec::new() }
@@ -69,72 +71,7 @@ impl<R: Runtime> Builder<R> {
     ) -> Self {
         let scheme = scheme.into();
         self.inits.push(Box::new(move |builder| {
-            let state = State::new(scheme.clone(), listener);
-            builder.register_uri_scheme_protocol(scheme, move |app_handle, req| {
-                if req.method() != http::method::Method::POST {
-                    return Err(InvalidMethodError.into());
-                }
-
-                let uri: http::Uri = req.uri().parse()?;
-                let path: RequestPath = uri.path().parse()?;
-                let body = req.body();
-                match path {
-                    RequestPath::Push { id, key } => {
-                        let connections = state.connections();
-                        get_connection_into!(connections; id, key -> connection);
-                        let body = body.clone();
-                        async_runtime::block_on(async { connection.tx.send(body).await })?;
-                        any_origin_response()
-                            .status(StatusCode::OK)
-                            .body(Vec::new())
-                    }
-                    RequestPath::Pop { id, key } => {
-                        let connections = state.connections();
-                        get_connection_into!(connections; id, key -> connection);
-                        let result = connection.rx.try_next();
-                        match result {
-                            Ok(Some(body)) => {
-                                any_origin_response().status(StatusCode::OK).body(body)
-                            }
-                            Ok(None) => any_origin_response()
-                                .status(StatusCode::NO_CONTENT)
-                                .body(Vec::new()),
-                            Err(_) => any_origin_response()
-                                .status(StatusCode::CONTINUE)
-                                .body(Vec::new()),
-                        }
-                    }
-                    RequestPath::CloseDown { id, key } => {
-                        let connections = state.connections();
-                        get_connection_into!(connections; id, key -> connection);
-                        connection.rx.close();
-                        any_origin_response().body(Vec::new())
-                    }
-                    RequestPath::CloseUp { id, key } => {
-                        let connections = state.connections();
-                        get_connection_into!(connections; id, key -> connection);
-                        connection.tx.close_channel();
-                        any_origin_response().body(Vec::new())
-                    }
-                    RequestPath::Close { id, key } => {
-                        let connections = state.connections();
-                        get_connection_into!(connections; id, key -> connection);
-                        connection.tx.close_channel();
-                        connection.rx.close();
-                        any_origin_response().body(Vec::new())
-                    }
-                    RequestPath::Connect => handshake(app_handle, &state, req),
-                    RequestPath::CleanUp { id, key } => {
-                        {
-                            // key validation
-                            let connections = state.connections();
-                            get_connection_into!(connections; id, key -> connection);
-                        }
-                        // disconnect event response. assert js side cleanup is done
-                        cleanup(app_handle, &state, id, req)
-                    }
-                }
-            })
+            register_bin_ipc_protocol(builder, scheme, listener)
         }));
 
         self
@@ -147,6 +84,79 @@ impl<R: Runtime> Builder<R> {
         }
         builder.build()
     }
+}
+/// register bin ipc protocol to plugin builder.
+/// for plugin internal ipc.
+pub fn register_bin_ipc_protocol<R: Runtime>(
+    builder: PluginBuilder<R>,
+    scheme: impl Into<String>,
+    listener: impl Listener<R>,
+) -> tauri::plugin::Builder<R> {
+    let scheme = scheme.into();
+    let state = State::new(scheme.clone(), listener);
+    builder.register_uri_scheme_protocol(scheme, move |app_handle, req| {
+        if req.method() != http::method::Method::POST {
+            return Err(InvalidMethodError.into());
+        }
+
+        let uri: http::Uri = req.uri().parse()?;
+        let path: RequestPath = uri.path().parse()?;
+        let body = req.body();
+        match path {
+            RequestPath::Push { id, key } => {
+                let connections = state.connections();
+                get_connection_into!(connections; id, key -> connection);
+                let body = body.clone();
+                async_runtime::block_on(async { connection.tx.send(body).await })?;
+                any_origin_response()
+                    .status(StatusCode::OK)
+                    .body(Vec::new())
+            }
+            RequestPath::Pop { id, key } => {
+                let connections = state.connections();
+                get_connection_into!(connections; id, key -> connection);
+                let result = connection.rx.try_next();
+                match result {
+                    Ok(Some(body)) => any_origin_response().status(StatusCode::OK).body(body),
+                    Ok(None) => any_origin_response()
+                        .status(StatusCode::NO_CONTENT)
+                        .body(Vec::new()),
+                    Err(_) => any_origin_response()
+                        .status(StatusCode::CONTINUE)
+                        .body(Vec::new()),
+                }
+            }
+            RequestPath::CloseDown { id, key } => {
+                let connections = state.connections();
+                get_connection_into!(connections; id, key -> connection);
+                connection.rx.close();
+                any_origin_response().body(Vec::new())
+            }
+            RequestPath::CloseUp { id, key } => {
+                let connections = state.connections();
+                get_connection_into!(connections; id, key -> connection);
+                connection.tx.close_channel();
+                any_origin_response().body(Vec::new())
+            }
+            RequestPath::Close { id, key } => {
+                let connections = state.connections();
+                get_connection_into!(connections; id, key -> connection);
+                connection.tx.close_channel();
+                connection.rx.close();
+                any_origin_response().body(Vec::new())
+            }
+            RequestPath::Connect => handshake(app_handle, &state, req),
+            RequestPath::CleanUp { id, key } => {
+                {
+                    // key validation
+                    let connections = state.connections();
+                    get_connection_into!(connections; id, key -> connection);
+                }
+                // disconnect event response. assert js side cleanup is done
+                cleanup(app_handle, &state, id, req)
+            }
+        }
+    })
 }
 
 fn any_origin_response() -> http::ResponseBuilder {
