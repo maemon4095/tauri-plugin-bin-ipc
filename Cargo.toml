@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-bin-ipc"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["maemon4095"]
 description = "binary ipc via custom protocol"
 edition = "2021"
