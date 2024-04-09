@@ -1,8 +1,8 @@
 import { type as ostype } from "@tauri-apps/api/os";
 import { InterruptibleLock as Lock } from "https://raw.githubusercontent.com/maemon4095/ts_components/release/v0.3.0/lock/mod.ts";
 import { listen } from "@tauri-apps/api/event";
-import { Connection } from "./connection.ts";
-export type { Connection };
+import { BinIpcStream } from "./bin_ipc_stream.ts";
+export type { BinIpcStream };
 
 const BIN_IPC_EVENT_NAME = "bin-ipc-signal";
 type BinPicEventType = "ready-to-pop" | "cleanup";
@@ -56,7 +56,7 @@ async function handshake(host: string) {
     return js as { id: number, key: number; };
 }
 
-export async function connect(scheme: string): Promise<Connection> {
+export async function connect(scheme: string): Promise<BinIpcStream> {
     const host = await resolveBinaryChannel(scheme);
     const { id, key } = await handshake(host);
     const channel = `${host}/${id}/${key}`;
@@ -193,5 +193,5 @@ export async function connect(scheme: string): Promise<Connection> {
         });
     }
 
-    return { writable: upstream, readable: downstream, close };
+    return { id, writable: upstream, readable: downstream, close };
 }
