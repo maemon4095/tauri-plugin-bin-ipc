@@ -1,9 +1,5 @@
 {
     "deno.enable": true,
-    "deno.enablePaths": [
-        "src-ts",
-        "deno.json"
-    ],
     "[typescript]": {
         "editor.defaultFormatter": "denoland.vscode-deno"
     }

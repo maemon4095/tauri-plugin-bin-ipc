@@ -1,5 +1,0 @@
-{
-  "imports": {
-    "@tauri-apps/api": "npm:@tauri-apps/api"
-  }
-}
