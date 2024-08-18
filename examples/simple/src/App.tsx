@@ -8,7 +8,8 @@ export default function App() {
     <div>
       <button
         onClick={() => {
-          invoke_raw("simple-plugin", "hello", new Uint8Array([0, 1, 2]))
+          // https://crates.io/crates/ciborium
+          invoke_raw("simple-plugin", "hello", new Uint8Array([1, 2, 3]))
             .then(
               (res) => {
                 setResponse(new TextDecoder().decode(res));

@@ -1,0 +1,16 @@
+[package]
+name = "tauri-plugin-bin-ipc-msgpack"
+rust-version.workspace = true
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+
+[dependencies]
+tauri.workspace = true
+serde.workspace = true
+rmp-serde = "1.3"
+core = { package = "tauri-plugin-bin-ipc-core", path = "../core" }
+msgpack-macro = { package = "tauri-plugin-bin-ipc-msgpack-macro", path = "../msgpack-macro" }
+
+[dev-dependencies]
+pollster = "0.3"

@@ -1,0 +1,12 @@
+[package]
+name = "tauri-plugin-bin-ipc-msgpack-macro"
+rust-version.workspace = true
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+macro-impl = { package = "tauri-plugin-bin-ipc-msgpack-macro-impl", path = "../msgpack-macro-impl" }

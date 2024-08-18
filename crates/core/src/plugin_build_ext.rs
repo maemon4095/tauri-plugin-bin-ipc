@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use crate::{
     handler::BinIpcHandler,
     secure_arena::{SecureArena, SecureArenaId},
@@ -7,6 +5,7 @@ use crate::{
     BoxError,
 };
 use serde::de::DeserializeOwned;
+use std::sync::{Arc, Mutex};
 use tauri::{
     api::http::StatusCode,
     http::{
