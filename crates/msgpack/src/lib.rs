@@ -1,5 +1,9 @@
+mod de;
+#[doc(hidden)]
+pub mod deps;
+
+pub use de::{CommandArgDeserializer, DeserializeProxy};
 pub use msgpack_macro::command;
-use rmp_serde::decode::ReadRefReader;
 
 pub trait TauriPluginBinIpcMessagePackCommand<R: tauri::Runtime> {
     const NAME: &'static str;
@@ -8,81 +12,93 @@ pub trait TauriPluginBinIpcMessagePackCommand<R: tauri::Runtime> {
         &self,
         app: ::tauri::AppHandle<R>,
         payload: ::std::vec::Vec<u8>,
-    ) -> impl ::std::future::Future<Output = Vec<u8>>;
+    ) -> impl ::std::future::Future<Output = Result<Vec<u8>, Box<dyn std::error::Error>>>;
 }
 
-// 外部クレートの型なので、実装のコンフリクトが起きる。
-// traitを使った方法は使えない。型を見て関数ポインタを返すような仕様にするか？
-impl<R: tauri::Runtime> CommandArg<R> for tauri::AppHandle<R> {
-    fn from_command<'de>(
-        de: CommandDeserializer<'de, R>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(de.app_handle)
-    }
-}
-
-impl<T: serde::de::DeserializeOwned, R: tauri::Runtime> CommandArg<R> for T {
-    fn from_command<'de>(
-        de: CommandDeserializer<'de, R>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        todo!()
-    }
-}
-
-trait CommandArg<R: tauri::Runtime>: Sized {
-    fn from_command<'de>(
-        de: CommandDeserializer<'de, R>,
-    ) -> Result<Self, Box<dyn std::error::Error>>;
-}
-
-struct CommandDeserializer<'de, R: tauri::Runtime> {
-    app_handle: tauri::AppHandle<R>,
-    de: rmp_serde::Deserializer<ReadRefReader<'de, [u8]>>,
-}
-
-struct Payload<R: tauri::Runtime> {
-    app: tauri::AppHandle<R>,
-    arg0: usize,
-}
-
-impl<R: tauri::Runtime> Payload<R> {
-    fn de<'de>(
-        app_handle: tauri::AppHandle<R>,
-        de: rmp_serde::Deserializer<ReadRefReader<'de, [u8]>>,
-    ) {
-    }
-}
 #[command]
 fn a(x: usize) -> usize {
     x
 }
 
-fn b<'de>(mut de: rmp_serde::Deserializer<ReadRefReader<'de, [u8]>>) {
-    struct X {}
+fn b<R: ::tauri::Runtime>(
+    app: &::tauri::AppHandle<R>,
+    payload: Vec<::std::primitive::u8>,
+) -> Result<(), Box<dyn crate::deps::std::error::Error>> {
+    use crate::deps::*;
+    // 引数の番号のみで管理する。 AppHandleを受け取らないコマンドに対応するため。
+    struct CommandArgs<R: tauri::Runtime> {
+        __marker: PhantomData<R>,
+        arg0: Option<usize>,
+        arg1: Option<tauri::AppHandle<R>>,
+    }
 
-    struct V {}
+    let command_args = CommandArgs::deserialize(app, &payload)?;
 
-    impl<'de> serde::de::Visitor<'de> for V {
-        type Value = X;
+    return Ok(());
 
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("struct")
-        }
+    impl<R: tauri::Runtime> CommandArgs<R> {
+        fn deserialize(
+            app: &::tauri::AppHandle<R>,
+            payload: &[u8],
+        ) -> Result<CommandArgs<R>, rmp_serde::decode::Error> {
+            struct Visitor<'a, R: tauri::Runtime>(&'a tauri::AppHandle<R>);
 
-        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-        where
-            A: serde::de::MapAccess<'de>,
-        {
-            while let Some(k) = map.next_key::<&str>()? {
-                match k {
-                    "a" => {
-                        map.next_value::<usize>()?;
+            impl<'de, R: tauri::Runtime> serde::de::Visitor<'de> for Visitor<'de, R> {
+                type Value = CommandArgs<R>;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    formatter.write_str("struct")
+                }
+
+                fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                where
+                    A: serde::de::MapAccess<'de>,
+                {
+                    let mut command_args = CommandArgs::<R> {
+                        __marker: PhantomData,
+                        arg0: None,
+                        arg1: None,
+                    };
+
+                    const COMMAND_ARG_NAME_0: &str = "arg0";
+
+                    while let Some(k) = map.next_key::<&str>()? {
+                        match k {
+                            COMMAND_ARG_NAME_0 => {
+                                struct Proxy<'a, R: tauri::Runtime>(&'a tauri::AppHandle<R>);
+                                impl<'de, R: tauri::Runtime> serde::de::DeserializeSeed<'de> for Proxy<'de, R> {
+                                    type Value = usize;
+
+                                    fn deserialize<D>(self, de: D) -> Result<Self::Value, D::Error>
+                                    where
+                                        D: serde::Deserializer<'de>,
+                                    {
+                                        let de = CommandArgDeserializer {
+                                            app_handle: self.0,
+                                            de,
+                                        };
+
+                                        DeserializeProxy::<R, usize>(PhantomData).deserialize(de)
+                                    }
+                                }
+
+                                let arg0 = map.next_value_seed(Proxy(&self.0))?;
+                                command_args.arg0 = Some(arg0);
+                            }
+                            _ => {
+                                return Err(<A::Error as serde::de::Error>::unknown_field(
+                                    k,
+                                    &[COMMAND_ARG_NAME_0],
+                                ))
+                            }
+                        }
                     }
-                    _ => panic!(),
+
+                    Ok(command_args)
                 }
             }
 
-            todo!()
+            rmp_serde::Deserializer::from_read_ref(&payload).deserialize_map(Visitor(app))
         }
     }
 }

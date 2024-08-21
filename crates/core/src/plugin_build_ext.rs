@@ -125,7 +125,7 @@ where
                         let name = command.to_string();
                         let handler = Arc::clone(&handler);
                         async move {
-                            let response = handler.handle(app.clone(), name, payload).await;
+                            let response = handler.handle(&app, name, payload).await;
 
                             let state = app.state::<BinIpcState>();
 
