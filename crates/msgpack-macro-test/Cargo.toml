@@ -1,0 +1,10 @@
+[package]
+name = "msgpack-macro-test"
+rust-version.workspace = true
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+
+[dependencies]
+tauri-plugin-bin-ipc-msgpack = { path = "../msgpack" }
+tauri.workspace = true

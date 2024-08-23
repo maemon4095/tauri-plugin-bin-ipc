@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 use tauri::AppHandle;
 
 pub struct CommandArgDeserializer<'de, R: tauri::Runtime, D: serde::Deserializer<'de>> {
-    pub(crate) app_handle: &'de AppHandle<R>,
-    pub(crate) de: D,
+    pub app_handle: &'de AppHandle<R>,
+    pub de: D,
 }
 
 /// AppHandleは外部クレートの型なので、tauri::command::CommandArgのようなtrait boundを使った処理の切り替えはできない。
@@ -29,7 +29,7 @@ impl<R: tauri::Runtime, T> std::ops::Deref for DeserializeProxy<R, T> {
     type Target = DeserializeAppHandleProxy<R, T>;
 
     fn deref(&self) -> &Self::Target {
-        &DeserializeAppHandleProxy::<R, T>(PhantomData)
+        &DeserializeAppHandleProxy(PhantomData)
     }
 }
 
@@ -43,24 +43,3 @@ impl<R: tauri::Runtime> DeserializeAppHandleProxy<R, AppHandle<R>> {
         Ok(de.app_handle.clone())
     }
 }
-
-// pub struct DeserializeFallback<R: tauri::Runtime, T>(PhantomData<(R, T)>);
-
-// impl<R: tauri::Runtime, T> DeserializeFallback<R, T> {
-//     pub fn deserialize<'de, D: serde::Deserializer<'de>>(
-//         &self,
-//         _: CommandArgDeserializer<'de, R, D>,
-//     ) -> Result<T, D::Error> {
-//         Err(<D::Error as serde::de::Error>::custom(
-//             "command parameter type must be deserializable.",
-//         ))
-//     }
-// }
-
-// impl<R: tauri::Runtime, T> std::ops::Deref for DeserializeAppHandleProxy<R, T> {
-//     type Target = DeserializeFallback<R, T>;
-
-//     fn deref(&self) -> &Self::Target {
-//         &DeserializeFallback::<R, T>(PhantomData)
-//     }
-// }
