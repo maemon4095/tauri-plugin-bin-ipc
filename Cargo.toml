@@ -18,8 +18,9 @@ members = ["crates/*"]
 resolver = "2"
 
 [features]
-default = ["msgpack"]
+default = ["default-msgpack"]
 msgpack = ["dep:msgpack"]
+default-msgpack = ["msgpack"]
 
 [dependencies]
 core = { package = "tauri-plugin-bin-ipc-core", path = "crates/core" }
