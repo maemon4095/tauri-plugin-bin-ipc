@@ -15,3 +15,16 @@ impl std::fmt::Display for MissingArgumentError {
 }
 
 impl std::error::Error for MissingArgumentError {}
+
+#[derive(Debug)]
+pub struct NoSuchCommandError(pub String);
+
+impl std::fmt::Display for NoSuchCommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("Command `")?;
+        f.write_str(&self.0)?;
+        f.write_str("` does not exists.")
+    }
+}
+
+impl std::error::Error for NoSuchCommandError {}

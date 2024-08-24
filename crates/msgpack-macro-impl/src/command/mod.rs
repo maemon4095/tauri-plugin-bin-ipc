@@ -2,7 +2,7 @@ mod impl_msgpack_command;
 mod invoke_fn;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 
 pub fn bin_command(_attr: TokenStream, body: TokenStream) -> TokenStream {
     let item_fn: syn::ItemFn = match syn::parse2(body) {
@@ -10,23 +10,15 @@ pub fn bin_command(_attr: TokenStream, body: TokenStream) -> TokenStream {
         Err(e) => return e.into_compile_error(),
     };
 
-    let vis = &item_fn.vis;
-    let fn_name = &item_fn.sig.ident;
-    let generics = &item_fn.sig.generics;
-    let command_name = &fn_name;
-    let invoke_fn = invoke_fn::gen(&item_fn);
-    let impl_msgpack_command = impl_msgpack_command::gen(&item_fn);
+    let ctx = match CommandGenerationContext::new(item_fn) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
 
-    if generics.params.len() > 1 {
-        return quote!(compile_error!(
-            "bin ipc command could have at most one generic parameter."
-        ));
-    }
-    if generics.lifetimes().count() > 0 {
-        return quote!(compile_error!(
-            "bin ipc command cannot have lifetime parameter."
-        ));
-    }
+    let vis = &ctx.item_fn.vis;
+    let command_name = &ctx.command_name;
+    let invoke_fn = invoke_fn::gen(&ctx);
+    let impl_msgpack_command = impl_msgpack_command::gen(&ctx);
 
     quote! {
         #[allow(non_camel_case_types)]
@@ -37,5 +29,47 @@ pub fn bin_command(_attr: TokenStream, body: TokenStream) -> TokenStream {
         }
 
         #impl_msgpack_command
+    }
+}
+
+struct CommandGenerationContext {
+    pub item_fn: syn::ItemFn,
+    pub ident_suffix: &'static str,
+    pub runtime_generic_param: syn::Ident,
+    pub command_name: syn::Ident,
+    pub deps_path: TokenStream,
+    pub return_type: syn::Type,
+}
+
+impl CommandGenerationContext {
+    fn new(item_fn: syn::ItemFn) -> Result<Self, TokenStream> {
+        let ident_suffix = "0cc84921_b5dc_4044_86a1_58ee53f2643a";
+        let deps_ident = format_ident!("__bin_ipc_deps_{}", ident_suffix);
+        let deps_path = quote!(
+            ::tauri_plugin_bin_ipc_msgpack::#deps_ident
+        );
+        let generics = &item_fn.sig.generics;
+        let command_name = item_fn.sig.ident.clone();
+        let runtime_generic_param = match generics.params.first() {
+            Some(syn::GenericParam::Type(e)) => e.ident.clone(),
+            None => format_ident!("__R_{}", ident_suffix),
+            _ => {
+                return Err(quote!(compile_error!(
+                    "bin ipc command only have type parameter."
+                )))
+            }
+        };
+        let return_type = match &item_fn.sig.output {
+            syn::ReturnType::Default => syn::parse_quote!(()),
+            syn::ReturnType::Type(_, t) => t.as_ref().clone(),
+        };
+        Ok(Self {
+            ident_suffix,
+            item_fn,
+            command_name,
+            deps_path,
+            runtime_generic_param,
+            return_type,
+        })
     }
 }

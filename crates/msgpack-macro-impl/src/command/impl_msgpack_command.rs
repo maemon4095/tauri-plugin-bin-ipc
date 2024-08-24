@@ -1,157 +1,140 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-pub fn gen(item_fn: &syn::ItemFn) -> TokenStream {
-    let fn_name = &item_fn.sig.ident;
-    let generic_arg = item_fn
-        .sig
-        .generics
-        .type_params()
-        .next()
-        .map(|e| e.ident.clone())
-        .unwrap_or_else(|| format_ident!("__R"));
+use super::CommandGenerationContext;
 
-    let return_ty = match &item_fn.sig.output {
-        syn::ReturnType::Default => quote!(()),
-        syn::ReturnType::Type(_, ty) => quote!(#ty),
-    };
+struct CommandArgGenerationContext<'a> {
+    command_name: &'a syn::Ident,
+    runtime_generic_param: &'a syn::Ident,
+    command_arg_name: syn::Ident,
+    return_type: &'a syn::Type,
+    deps_path: &'a TokenStream,
+    arg_names: Vec<String>,
+    fields: Vec<syn::Ident>,
+    types: Vec<syn::Type>,
+}
 
-    let command_name = &fn_name;
-    let command_name_str = command_name.to_string();
-    let command_args_def = gen_command_args(item_fn);
-    let command_args = match get_command_args(item_fn) {
+pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
+    let ctx = match CommandArgGenerationContext::new(ctx) {
         Ok(v) => v,
         Err(e) => return e,
     };
-    let command_arg_names: Vec<_> = command_args.iter().map(|p| p.0.as_str()).collect();
-    let command_arg_fields: Vec<_> = command_args
-        .iter()
-        .enumerate()
-        .map(|(i, _)| format_ident!("arg{}", i))
-        .collect();
+    let command_name = &ctx.command_name;
+    let command_name_str = ctx.command_name.to_string();
+    let command_arg_names = &ctx.arg_names;
+    let command_arg_fields = &ctx.fields;
+    let deps = &ctx.deps_path;
+    let generic_arg = &ctx.runtime_generic_param;
+    let return_ty = &ctx.return_type;
 
-    let deps = quote!(::tauri_plugin_bin_ipc_msgpack::__deps);
+    let command_arg_name = &ctx.command_arg_name;
+    let command_args_def = gen_command_args(&ctx);
+
+    let map_err = quote!(map_err(|e| #deps::Box::new(e) as #deps::BoxError));
 
     quote! {
-        impl<#generic_arg: #deps::tauri::Runtime> #deps::TauriPluginBinIpcMessagePackCommand<#generic_arg> for #command_name {
+        impl<#generic_arg: #deps::Runtime> #deps::TauriPluginBinIpcMessagePackCommand<#generic_arg> for #command_name {
             const NAME: &'static #deps::str = #command_name_str;
 
             fn handle(
                 &self,
-                app: &#deps::tauri::AppHandle<#generic_arg>,
+                app: &#deps::AppHandle<#generic_arg>,
                 payload: &[#deps::u8],
-            ) -> impl 'static + #deps::Future<Output = #deps::HandleResult> + Send {
-                use ::tauri_plugin_bin_ipc_msgpack::__deps::*; //todo
-
+            ) -> impl 'static + #deps::Future<Output = #deps::HandleResult> + #deps::Send {
                 #command_args_def
 
-                let mut command_args = match CommandArgs::deserialize(&app, &payload) {
-                    Ok(v) => v,
-                    Err(e) => return OrFuture::F0(std::future::ready(Err(Box::new(e) as BoxError)))
+                let mut command_args = match #command_arg_name::deserialize(&app, &payload) {
+                    #deps::Ok(v) => v,
+                    #deps::Err(e) => return #deps::OrFuture::F0(#deps::ready_future(#deps::Err(#deps::Box::new(e) as #deps::BoxError)))
                 };
 
-                OrFuture::F1((move || async move {
+                #deps::OrFuture::F1((move || async move {
                     let result = Self::invoke(
                         #(
-                            command_args.#command_arg_fields.take().ok_or(MissingArgumentError {
+                            command_args.#command_arg_fields.take().ok_or(#deps::MissingArgumentError {
                                 command_name: #command_name_str,
                                 arg_name: #command_arg_names
-                            }).map_err(|e| Box::new(e) as BoxError)?
+                            }).#map_err?
                         ),*
-                    ).await.map_err(|e| Box::new(e) as BoxError)?;
+                    ).await.#map_err?;
 
-                    let response = WrapResult::<#return_ty>(PhantomData).wrap(result).map_err(|e| Box::new(e) as BoxError)?;
+                    let response = #deps::WrapResult::<#return_ty>(#deps::PhantomData).wrap(result).#map_err?;
 
-                    Ok(rmp_serde::to_vec(&response).map_err(|e| Box::new(e) as BoxError)?)
+                    #deps::Ok(#deps::encode_to_vec(&response).#map_err?)
                 })())
             }
         }
     }
 }
 
-fn gen_command_args(item_fn: &syn::ItemFn) -> TokenStream {
-    let fn_name = &item_fn.sig.ident;
-    let command_name = &fn_name;
-    let command_name_str = command_name.to_string();
-    let generic_arg = item_fn
-        .sig
-        .generics
-        .type_params()
-        .next()
-        .map(|e| e.ident.clone())
-        .unwrap_or_else(|| format_ident!("__R"));
-
+fn gen_command_args(ctx: &CommandArgGenerationContext) -> TokenStream {
+    let command_name_str = ctx.command_name.to_string();
     let visitor_expecting = format!("arguments of command `{}`", command_name_str);
-    let command_args = match get_command_args(item_fn) {
-        Ok(v) => v,
-        Err(e) => return e,
-    };
-    let command_arg_names: Vec<_> = command_args.iter().map(|p| p.0.as_str()).collect();
-    let command_arg_fields: Vec<_> = command_args
-        .iter()
-        .enumerate()
-        .map(|(i, _)| format_ident!("arg{}", i))
-        .collect();
-    let command_arg_types: Vec<_> = command_args.iter().map(|p| &p.1).collect();
+    let command_arg_names = &ctx.arg_names;
+    let command_arg_fields = &ctx.fields;
+    let command_arg_types = &ctx.types;
+    let deps = &ctx.deps_path;
+    let generic_arg = &ctx.runtime_generic_param;
+    let command_arg_name = &ctx.command_arg_name;
 
     quote! {
-        struct CommandArgs<#generic_arg: tauri::Runtime> {
-            __marker: PhantomData<#generic_arg>,
+        struct #command_arg_name<#generic_arg: #deps::Runtime> {
+            __marker: #deps::PhantomData<#generic_arg>,
             #(
-                #command_arg_fields : Option<#command_arg_types>
+                #command_arg_fields : #deps::Option<#command_arg_types>
             ),*
         }
 
-        impl<#generic_arg: tauri::Runtime> CommandArgs<#generic_arg> {
+        impl<#generic_arg: #deps::Runtime> #command_arg_name<#generic_arg> {
             fn deserialize(
-                app: &tauri::AppHandle<#generic_arg>,
-                payload: &[u8],
-            ) -> Result<Self, rmp_serde::decode::Error> {
-                struct Visitor<'a, #generic_arg: tauri::Runtime>(&'a tauri::AppHandle<#generic_arg>);
+                app: &#deps::AppHandle<#generic_arg>,
+                payload: &[#deps::u8],
+            ) -> Result<Self, #deps::MsgpackDecodeError> {
+                struct Visitor<'a, #generic_arg: #deps::Runtime>(&'a #deps::AppHandle<#generic_arg>);
 
-                impl<'de, #generic_arg: tauri::Runtime> serde::de::Visitor<'de> for Visitor<'de, #generic_arg> {
-                    type Value = CommandArgs<#generic_arg>;
+                impl<'de, #generic_arg: #deps::Runtime> #deps::Visitor<'de> for Visitor<'de, #generic_arg> {
+                    type Value = #command_arg_name<#generic_arg>;
 
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    fn expecting(&self, formatter: &mut #deps::StdFormatter) -> #deps::StdFmtResult {
                         formatter.write_str(#visitor_expecting)
                     }
 
-                    fn visit_map<__A>(self, mut map: __A) -> Result<Self::Value, __A::Error>
+                    fn visit_map<__A>(self, mut map: __A) -> #deps::Result<Self::Value, __A::Error>
                     where
-                        __A: serde::de::MapAccess<'de>,
+                        __A: #deps::MapAccess<'de>,
                     {
-                        let mut command_args = CommandArgs {
-                            __marker: PhantomData,
-                            #(#command_arg_fields: None),*
+                        let mut command_args = #command_arg_name {
+                            __marker: #deps::PhantomData,
+                            #(#command_arg_fields: #deps::None),*
                         };
 
-                        while let Some(k) = map.next_key::<&str>()? {
+                        while let #deps::Some(k) = map.next_key::<&#deps::str>()? {
                             match k {
                                 #(
                                     #command_arg_names => {
-                                        struct Proxy<'a, #generic_arg: tauri::Runtime>(&'a tauri::AppHandle<#generic_arg>);
-                                        impl<'de, #generic_arg: tauri::Runtime> serde::de::DeserializeSeed<'de> for Proxy<'de, #generic_arg> {
+                                        struct Proxy<'a, #generic_arg: #deps::Runtime>(&'a #deps::AppHandle<#generic_arg>);
+                                        impl<'de, #generic_arg: #deps::Runtime> #deps::DeserializeSeed<'de> for Proxy<'de, #generic_arg> {
                                             type Value = #command_arg_types;
 
-                                            fn deserialize<__D>(self, de: __D) -> Result<Self::Value, __D::Error>
+                                            fn deserialize<__D>(self, de: __D) -> #deps::Result<Self::Value, __D::Error>
                                             where
-                                                __D: serde::Deserializer<'de>,
+                                                __D: #deps::Deserializer<'de>,
                                             {
-                                                let de = CommandArgDeserializer {
+                                                let de = #deps::CommandArgDeserializer {
                                                     app_handle: self.0,
                                                     de,
                                                 };
 
-                                                DeserializeProxy::<#generic_arg, #command_arg_types>(PhantomData).deserialize(de)
+                                                #deps::DeserializeProxy::<#generic_arg, #command_arg_types>(#deps::PhantomData).deserialize(de)
                                             }
                                         }
 
                                         let arg = map.next_value_seed(Proxy(&self.0))?;
-                                        command_args.#command_arg_fields = Some(arg);
+                                        command_args.#command_arg_fields = #deps::Some(arg);
                                     }
                                 )*
                                 _ => {
-                                    return Err(<__A::Error as serde::de::Error>::unknown_field(
+                                    return #deps::Err(<__A::Error as #deps::SerdeError>::unknown_field(
                                         k,
                                         &[#(#command_arg_names),*],
                                     ))
@@ -159,11 +142,11 @@ fn gen_command_args(item_fn: &syn::ItemFn) -> TokenStream {
                             }
                         }
 
-                        Ok(command_args)
+                        #deps::Ok(command_args)
                     }
                 }
 
-                rmp_serde::Deserializer::from_read_ref(&payload).deserialize_map(Visitor(app))
+                <_ as #deps::Deserializer>::deserialize_map(&mut #deps::MsgpackDeserializer::from_read_ref(&payload), Visitor(app))
             }
         }
     }
@@ -186,4 +169,41 @@ fn get_command_args(item_fn: &syn::ItemFn) -> Result<Vec<(String, syn::Type)>, T
             },
         })
         .collect()
+}
+
+impl<'a> CommandArgGenerationContext<'a> {
+    pub fn new(ctx: &'a CommandGenerationContext) -> Result<Self, TokenStream> {
+        let command_args = match get_command_args(&ctx.item_fn) {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+
+        let CommandGenerationContext {
+            runtime_generic_param,
+            command_name,
+            deps_path,
+            return_type,
+            ..
+        } = ctx;
+        let command_arg_name = format_ident!("__CommandArgs_{}", ctx.ident_suffix);
+        let mut arg_names = Vec::new();
+        let mut fields = Vec::new();
+        let mut types = Vec::new();
+        for (i, (arg_name, arg_ty)) in command_args.into_iter().enumerate() {
+            arg_names.push(arg_name);
+            fields.push(format_ident!("arg{}", i));
+            types.push(arg_ty);
+        }
+
+        Ok(Self {
+            runtime_generic_param,
+            command_name,
+            deps_path,
+            return_type,
+            command_arg_name,
+            arg_names,
+            fields,
+            types,
+        })
+    }
 }

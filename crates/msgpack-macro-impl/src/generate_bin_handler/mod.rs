@@ -9,34 +9,24 @@ pub fn generate_bin_handler(args: TokenStream) -> TokenStream {
     };
 
     let commands = args.0.iter();
-    let deps = quote!(::tauri_plugin_bin_ipc_msgpack::__deps);
+    let deps =
+        quote!(::tauri_plugin_bin_ipc_msgpack::__bin_ipc_deps_0cc84921_b5dc_4044_86a1_58ee53f2643a);
+    let generated_handler = quote!(__GeneratedHandler_91d5ee51_f364_4349_b2f7_fcded5349e2e);
 
     quote! {
         {
-            struct GeneratedHandler;
+            #[allow(non_camel_case_types)]
+            struct #generated_handler;
 
-            #[derive(#deps::Debug)]
-            struct NoSuchCommandError(String);
-
-            impl #deps::std::fmt::Display for NoSuchCommandError {
-                fn fmt(&self, f: &mut #deps::std::fmt::Formatter) -> #deps::std::fmt::Result {
-                    f.write_str("Command `")?;
-                    f.write_str(&self.0)?;
-                    f.write_str("` does not exists.")
-                }
-            }
-
-            impl #deps::StdError for NoSuchCommandError {}
-
-            impl<R: #deps::tauri::Runtime> #deps::BinIpcHandler<R> for GeneratedHandler {
+            impl<R: #deps::Runtime> #deps::BinIpcHandler<R> for #generated_handler {
                 type Future = #deps::FlattenJoinHandle<
                     #deps::Vec<#deps::u8>
                 >;
 
-                fn handle(&self, app: &#deps::tauri::AppHandle<R>, name: &#deps::str, payload: &[#deps::u8]) -> #deps::Result<Self::Future, #deps::BoxError> {
+                fn handle(&self, app: &#deps::AppHandle<R>, name: &#deps::str, payload: &[#deps::u8]) -> #deps::Result<Self::Future, #deps::BoxError> {
                     match name {
                         #(
-                            <#commands as #deps::TauriPluginBinIpcMessagePackCommand<R>>::NAME => #deps::Ok(#deps::tauri::async_runtime::spawn(
+                            <#commands as #deps::TauriPluginBinIpcMessagePackCommand<R>>::NAME => #deps::Ok(#deps::spawn(
                                 <#commands as #deps::TauriPluginBinIpcMessagePackCommand<R>>::handle(
                                     &#commands,
                                     app,
@@ -44,12 +34,12 @@ pub fn generate_bin_handler(args: TokenStream) -> TokenStream {
                                 )
                             ).into()),
                         )*
-                        _ => #deps::Err(#deps::Box::new(NoSuchCommandError(name.to_string())) as #deps::BoxError)
+                        _ => #deps::Err(#deps::Box::new(#deps::NoSuchCommandError(name.to_string())) as #deps::BoxError)
                     }
                 }
             }
 
-            GeneratedHandler
+            #generated_handler
         }
     }
 }
