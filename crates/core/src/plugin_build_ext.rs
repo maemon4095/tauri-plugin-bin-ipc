@@ -119,16 +119,15 @@ where
                         return Err(TooManyRequests.into());
                     };
 
-                    let payload = req.body().clone();
+                    let task = match handler.handle(&app, command, req.body()) {
+                        Ok(v) => v,
+                        Err(e) => return Err(e),
+                    };
                     tauri::async_runtime::spawn({
                         let app = app.clone();
-                        let name = command.to_string();
-                        let handler = Arc::clone(&handler);
                         async move {
-                            let response = handler.handle(&app, name, payload).await;
-
+                            let response = task.await;
                             let state = app.state::<BinIpcState>();
-
                             match state.sessions.get(id) {
                                 None => (),
                                 Some(session) => {

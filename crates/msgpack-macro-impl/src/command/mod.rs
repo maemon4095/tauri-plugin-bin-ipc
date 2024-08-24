@@ -29,7 +29,6 @@ pub fn bin_command(_attr: TokenStream, body: TokenStream) -> TokenStream {
     }
 
     quote! {
-        #[doc(hidden)]
         #[allow(non_camel_case_types)]
         #vis struct #command_name;
 

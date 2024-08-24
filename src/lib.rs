@@ -1,1 +1,1 @@
-pub use core::{BinIpcHandler, PluginBuilderBinIpcExtension};
+pub use core::{BinIpcHandler, BoxError, PluginBuilderBinIpcExtension};

@@ -36,29 +36,34 @@ pub fn gen(item_fn: &syn::ItemFn) -> TokenStream {
         impl<#generic_arg: #deps::tauri::Runtime> #deps::TauriPluginBinIpcMessagePackCommand<#generic_arg> for #command_name {
             const NAME: &'static #deps::str = #command_name_str;
 
-            async fn handle(
+            fn handle(
                 &self,
                 app: &#deps::tauri::AppHandle<#generic_arg>,
-                payload: #deps::std::vec::Vec<u8>,
-            ) -> #deps::HandleResult {
+                payload: &[#deps::u8],
+            ) -> impl 'static + #deps::Future<Output = #deps::HandleResult> + Send {
                 use ::tauri_plugin_bin_ipc_msgpack::__deps::*; //todo
 
                 #command_args_def
 
-                let mut command_args = CommandArgs::deserialize(&app, &payload)?;
+                let mut command_args = match CommandArgs::deserialize(&app, &payload) {
+                    Ok(v) => v,
+                    Err(e) => return OrFuture::F0(std::future::ready(Err(Box::new(e) as BoxError)))
+                };
 
-                let result = Self::invoke(
-                    #(
-                        command_args.#command_arg_fields.take().ok_or(MissingArgumentError {
-                            command_name: #command_name_str,
-                            arg_name: #command_arg_names
-                        })?
-                    ),*
-                ).await?;
+                OrFuture::F1((move || async move {
+                    let result = Self::invoke(
+                        #(
+                            command_args.#command_arg_fields.take().ok_or(MissingArgumentError {
+                                command_name: #command_name_str,
+                                arg_name: #command_arg_names
+                            }).map_err(|e| Box::new(e) as BoxError)?
+                        ),*
+                    ).await.map_err(|e| Box::new(e) as BoxError)?;
 
-                let response = WrapResult::<#return_ty>(PhantomData).wrap(result)?;
+                    let response = WrapResult::<#return_ty>(PhantomData).wrap(result).map_err(|e| Box::new(e) as BoxError)?;
 
-                Ok(rmp_serde::to_vec(&response)?)
+                    Ok(rmp_serde::to_vec(&response).map_err(|e| Box::new(e) as BoxError)?)
+                })())
             }
         }
     }

@@ -1,6 +1,6 @@
 use tauri::async_runtime::JoinHandle;
 
-use crate::error::BoxError;
+use crate::BoxError;
 
 pub struct FlattenJoinHandle<T>(
     <JoinHandle<Result<T, BoxError>> as std::future::IntoFuture>::IntoFuture,
@@ -18,7 +18,7 @@ impl<T> std::future::Future for FlattenJoinHandle<T> {
             .map(|e| match e {
                 Ok(Ok(v)) => Ok(v),
                 Ok(Err(e)) => Err(e),
-                Err(e) => Err(BoxError::new(e)),
+                Err(e) => Err(Box::new(e) as BoxError),
             })
     }
 }

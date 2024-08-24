@@ -15,28 +15,36 @@ pub fn generate_handler(args: TokenStream) -> TokenStream {
         {
             struct GeneratedHandler;
 
+            #[derive(#deps::Debug)]
+            struct NoSuchCommandError(String);
+
+            impl #deps::std::fmt::Display for NoSuchCommandError {
+                fn fmt(&self, f: &mut #deps::std::fmt::Formatter) -> #deps::std::fmt::Result {
+                    f.write_str("Command `")?;
+                    f.write_str(&self.0)?;
+                    f.write_str("` does not exists.")
+                }
+            }
+
+            impl #deps::StdError for NoSuchCommandError {}
+
             impl<R: #deps::tauri::Runtime> #deps::BinIpcHandler<R> for GeneratedHandler {
                 type Future = #deps::FlattenJoinHandle<
                     #deps::Vec<#deps::u8>
                 >;
 
-                fn handle(&self, app: &#deps::tauri::AppHandle<R>, name: String, payload: Vec<u8>) -> Self::Future {
-                    match name.as_str() {
+                fn handle(&self, app: &#deps::tauri::AppHandle<R>, name: &#deps::str, payload: &[#deps::u8]) -> #deps::Result<Self::Future, #deps::BoxError> {
+                    match name {
                         #(
-                            <#commands as #deps::TauriPluginBinIpcMessagePackCommand<R>>::NAME => {
-                                let handle = #deps::tauri::async_runtime::spawn(
-                                    <#commands as #deps::TauriPluginBinIpcMessagePackCommand<R>>::handle(
-                                        &#commands,
-                                        app,
-                                        payload
-                                    )
-                                );
-
-                                todo!()
-                            }
+                            <#commands as #deps::TauriPluginBinIpcMessagePackCommand<R>>::NAME => #deps::Ok(#deps::tauri::async_runtime::spawn(
+                                <#commands as #deps::TauriPluginBinIpcMessagePackCommand<R>>::handle(
+                                    &#commands,
+                                    app,
+                                    payload
+                                )
+                            ).into()),
                         )*
-
-                        _ => {todo!()}
+                        _ => #deps::Err(#deps::Box::new(NoSuchCommandError(name.to_string())) as #deps::BoxError)
                     }
                 }
             }

@@ -1,17 +1,15 @@
 pub use crate::{
     de::{CommandArgDeserializer, DeserializeProxy},
-    error::{BoxError, MissingArgumentError},
+    error::MissingArgumentError,
     flatten_join_handle::FlattenJoinHandle,
+    or_future::OrFuture,
     wrap_result::WrapResult,
     HandleResult, TauriPluginBinIpcMessagePackCommand,
 };
-
-pub use core::BinIpcHandler;
+pub use core::{BinIpcHandler, BoxError};
 pub use rmp_serde;
 pub use serde;
 pub use serde::Deserializer;
-pub use std;
-pub use std::marker::PhantomData;
-pub use std::prelude::rust_2021::*;
-pub use std::primitive::*;
+pub use std::error::Error as StdError;
+pub use std::{self, future::Future, marker::PhantomData, prelude::rust_2021::*, primitive::*};
 pub use tauri;

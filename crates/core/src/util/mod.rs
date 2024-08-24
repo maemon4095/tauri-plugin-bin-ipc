@@ -13,28 +13,17 @@ macro_rules! declare_error {
 
 pub(crate) use declare_error;
 
-macro_rules! trait_alias {
-    ($id: ident = $($bounds: tt)+) => {
-        pub trait $id: $($bounds)* {}
-        impl<T: $($bounds)*> $id for T {}
-    };
-}
-
-pub(crate) use trait_alias;
-
 use tauri::Manager;
 
-trait_alias!(ThreadSafe = Send + Sync + 'static);
-
 pub trait AppHandleExt<R: tauri::Runtime> {
-    fn lazy_state<T: ThreadSafe>(
+    fn lazy_state<T: Send + Sync>(
         &self,
         init: impl FnOnce(&tauri::AppHandle<R>) -> T,
     ) -> tauri::State<'_, T>;
 }
 
 impl<R: tauri::Runtime> AppHandleExt<R> for tauri::AppHandle<R> {
-    fn lazy_state<T: ThreadSafe>(
+    fn lazy_state<T: Send + Sync>(
         &self,
         init: impl FnOnce(&tauri::AppHandle<R>) -> T,
     ) -> tauri::State<'_, T> {

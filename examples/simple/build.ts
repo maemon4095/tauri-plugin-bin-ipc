@@ -91,7 +91,9 @@ function generate() {
     const filepath = "index.html";
     const filter = path.globToRegExp(`**/*`);
     const determineLink = (file: string) => {
-        if (file.endsWith(".js")) return linking.script({ defer: true });
+        if (file.endsWith(".js")) {
+            return linking.script({ defer: true, type: "module" });
+        }
         if (file.endsWith(".css")) return linking.link({ rel: "stylesheet" });
     };
     return ({
