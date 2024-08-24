@@ -6,7 +6,7 @@ pub use crate::{
     wrap_result::WrapResult,
     HandleResult, TauriPluginBinIpcMessagePackCommand,
 };
-pub use core::{BinIpcHandler, BoxError};
+pub use bin_ipc_core::{BinIpcHandler, BoxError};
 pub use rmp_serde;
 pub use serde;
 pub use serde::Deserializer;

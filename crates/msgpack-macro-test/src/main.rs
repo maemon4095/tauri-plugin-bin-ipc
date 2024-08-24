@@ -1,5 +1,5 @@
 use tauri_plugin_bin_ipc_core::PluginBuilderBinIpcExtension;
-use tauri_plugin_bin_ipc_msgpack::{bin_command, generate_handler};
+use tauri_plugin_bin_ipc_msgpack::{bin_command, generate_bin_handler};
 
 fn main() {}
 
@@ -34,5 +34,5 @@ async fn async_command(x: usize, y: i32) -> Result<usize, std::num::TryFromIntEr
 #[allow(unused)]
 fn gen_handle<R: tauri::Runtime>() {
     tauri::plugin::Builder::<R>::new("test")
-        .bin_ipc_handler("scheme", generate_handler!(async_command));
+        .bin_ipc_handler("scheme", generate_bin_handler!(async_command));
 }

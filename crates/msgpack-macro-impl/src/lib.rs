@@ -1,5 +1,5 @@
 mod command;
-mod generate_handler;
+mod generate_bin_handler;
 
 pub use command::bin_command;
-pub use generate_handler::generate_handler;
+pub use generate_bin_handler::generate_bin_handler;

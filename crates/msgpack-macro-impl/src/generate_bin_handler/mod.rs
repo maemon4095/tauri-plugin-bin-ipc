@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::punctuated::Punctuated;
 
-pub fn generate_handler(args: TokenStream) -> TokenStream {
+pub fn generate_bin_handler(args: TokenStream) -> TokenStream {
     let args: GenerateHandlerArgs = match syn::parse2(args) {
         Ok(v) => v,
         Err(e) => return e.into_compile_error(),

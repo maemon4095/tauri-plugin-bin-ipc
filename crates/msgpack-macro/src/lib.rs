@@ -6,6 +6,6 @@ pub fn bin_command(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn generate_handler(item: TokenStream) -> TokenStream {
-    macro_impl::generate_handler(item.into()).into()
+pub fn generate_bin_handler(item: TokenStream) -> TokenStream {
+    macro_impl::generate_bin_handler(item.into()).into()
 }
