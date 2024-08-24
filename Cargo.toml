@@ -7,23 +7,23 @@ version.workspace = true
 authors.workspace = true
 exclude = ["/examples"]
 
-[dependencies]
-core = { package = "tauri-plugin-bin-ipc-core", path = "crates/core" }
-msgpack = { package = "tauri-plugin-bin-ipc-msgpack", path = "crates/msgpack", optional = true }
-
-[features]
-default = ["msgpack"]
-msgpack = ["dep:msgpack"]
+[workspace.package]
+rust-version = "1.60"
+edition = "2021"
+version = "0.2.0"
+authors = ["maemon4095"]
 
 [workspace]
 members = ["crates/*"]
 resolver = "2"
 
-[workspace.package]
-rust-version = "1.60"
-edition = "2021"
-version = "0.3.0"
-authors = ["maemon4095"]
+[features]
+default = ["msgpack"]
+msgpack = ["dep:msgpack"]
+
+[dependencies]
+core = { package = "tauri-plugin-bin-ipc-core", path = "crates/core" }
+msgpack = { package = "tauri-plugin-bin-ipc-msgpack", path = "crates/msgpack", optional = true }
 
 [workspace.dependencies]
 tauri = { version = "1", features = ["shell-open", "http-api"] }
