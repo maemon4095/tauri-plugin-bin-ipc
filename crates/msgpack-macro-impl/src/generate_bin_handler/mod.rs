@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 
 pub fn generate_bin_handler(args: TokenStream) -> TokenStream {
@@ -9,9 +9,8 @@ pub fn generate_bin_handler(args: TokenStream) -> TokenStream {
     };
 
     let commands = args.0.iter();
-    let deps =
-        quote!(::tauri_plugin_bin_ipc_msgpack::__bin_ipc_deps_0cc84921_b5dc_4044_86a1_58ee53f2643a);
-    let generated_handler = quote!(__GeneratedHandler_91d5ee51_f364_4349_b2f7_fcded5349e2e);
+    let deps = crate::deps_path();
+    let generated_handler = format_ident!("__GeneratedHandler_{}", crate::ident_suffix());
 
     quote! {
         {

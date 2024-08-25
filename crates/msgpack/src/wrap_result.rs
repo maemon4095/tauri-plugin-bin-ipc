@@ -2,26 +2,9 @@ use std::marker::PhantomData;
 
 pub struct WrapResult<T>(pub PhantomData<T>);
 
-mod private {
-    pub trait IsResult {
-        type Ok;
-        type Err;
-        fn into_result(self) -> Result<Self::Ok, Self::Err>;
-    }
-}
-
-impl<T, E> private::IsResult for Result<T, E> {
-    type Ok = T;
-    type Err = E;
-
-    fn into_result(self) -> Result<T, E> {
-        self
-    }
-}
-
-impl<T: private::IsResult> WrapResult<T> {
-    pub fn wrap(&self, value: T) -> Result<T::Ok, T::Err> {
-        value.into_result()
+impl<T, E> WrapResult<Result<T, E>> {
+    pub fn wrap(&self, value: Result<T, E>) -> Result<T, E> {
+        value
     }
 }
 

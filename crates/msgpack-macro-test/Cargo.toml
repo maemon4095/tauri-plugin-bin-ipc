@@ -6,6 +6,5 @@ version.workspace = true
 authors.workspace = true
 
 [dependencies]
-tauri-plugin-bin-ipc-msgpack = { path = "../msgpack" }
+tauri-plugin-bin-ipc = { path = "../..", features = ["default-msgpack"] }
 tauri.workspace = true
-tauri-plugin-bin-ipc-core = { path = "../core" }

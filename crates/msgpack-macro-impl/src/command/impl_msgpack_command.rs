@@ -8,7 +8,7 @@ struct CommandArgGenerationContext<'a> {
     runtime_generic_param: &'a syn::Ident,
     command_arg_name: syn::Ident,
     return_type: &'a syn::Type,
-    deps_path: &'a TokenStream,
+    deps_path: &'a syn::Path,
     arg_names: Vec<String>,
     fields: Vec<syn::Ident>,
     types: Vec<syn::Type>,

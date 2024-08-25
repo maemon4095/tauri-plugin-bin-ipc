@@ -37,17 +37,14 @@ struct CommandGenerationContext {
     pub ident_suffix: &'static str,
     pub runtime_generic_param: syn::Ident,
     pub command_name: syn::Ident,
-    pub deps_path: TokenStream,
+    pub deps_path: syn::Path,
     pub return_type: syn::Type,
 }
 
 impl CommandGenerationContext {
     fn new(item_fn: syn::ItemFn) -> Result<Self, TokenStream> {
-        let ident_suffix = "0cc84921_b5dc_4044_86a1_58ee53f2643a";
-        let deps_ident = format_ident!("__bin_ipc_deps_{}", ident_suffix);
-        let deps_path = quote!(
-            ::tauri_plugin_bin_ipc_msgpack::#deps_ident
-        );
+        let ident_suffix = crate::ident_suffix();
+        let deps_path = crate::deps_path();
         let generics = &item_fn.sig.generics;
         let command_name = item_fn.sig.ident.clone();
         let runtime_generic_param = match generics.params.first() {

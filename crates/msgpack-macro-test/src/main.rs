@@ -1,6 +1,4 @@
-use tauri_plugin_bin_ipc_core::PluginBuilderBinIpcExtension;
-use tauri_plugin_bin_ipc_msgpack::{bin_command, generate_bin_handler};
-
+use tauri_plugin_bin_ipc::{bin_command, generate_bin_handler, PluginBuilderBinIpcExtension};
 fn main() {}
 
 #[bin_command]
