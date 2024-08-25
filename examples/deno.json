@@ -1,6 +1,7 @@
 {
     "workspace": [
-        "./simple"
+        "./simple",
+        "./msgpack-command"
     ],
     "imports": {
         "@tauri-apps/api": "npm:@tauri-apps/api@1",

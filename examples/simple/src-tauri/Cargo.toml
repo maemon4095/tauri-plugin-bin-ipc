@@ -1,11 +1,10 @@
 [package]
-name = "app"
+name = "simple"
 version = "0.1.0"
 description = "tauri-plugin-bin-ipc simple example"
 authors = ["maemon4095"]
-license = ""
-repository = ""
-default-run = "app"
+license = "MIT"
+default-run = "simple"
 edition = "2021"
 rust-version = "1.60"
 
