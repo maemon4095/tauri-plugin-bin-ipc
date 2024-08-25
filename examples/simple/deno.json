@@ -7,7 +7,6 @@
         "@tauri-apps/api": "npm:@tauri-apps/api@1",
         "preact": "npm:preact@10.23",
         "preact/jsx-runtime": "npm:preact@10.23/jsx-runtime",
-        "~/": "./src/",
         "@bin-ipc": "../../src-ts/mod.ts"
     }
 }

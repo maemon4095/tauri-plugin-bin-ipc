@@ -4,6 +4,9 @@ import generateIndexFile, {
     linking,
 } from "jsr:@maemon4095-esbuild-x/plugin-generate-index-file@0.6";
 import { denoPlugins } from "jsr:@luca/esbuild-deno-loader@0.10";
+import tailwindcss from "npm:tailwindcss";
+import tailwindConfig from "./tailwind.config.js";
+import postcssPlugin from "jsr:@maemon4095-esbuild-x/plugin-postcss";
 
 const mode = Deno.args[0];
 switch (mode) {
@@ -77,6 +80,11 @@ async function createContext(
         sourcemap: mode !== "build",
         plugins: [
             cleanOutdir(),
+            postcssPlugin({
+                plugins: [
+                    tailwindcss(tailwindConfig),
+                ],
+            }),
             generateIndexFile({
                 generate: () => [
                     generate(),
