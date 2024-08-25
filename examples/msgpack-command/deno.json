@@ -1,0 +1,13 @@
+{
+    "tasks": {
+        "dev": "deno run -A build.ts dev",
+        "build": "deno run -A build.ts build"
+    },
+    "imports": {
+        "@tauri-apps/api": "npm:@tauri-apps/api@1",
+        "preact": "npm:preact@10.23",
+        "preact/jsx-runtime": "npm:preact@10.23/jsx-runtime",
+        "@bin-ipc": "../../src-ts/mod.ts",
+        "@types/": "https://raw.githubusercontent.com/maemon4095/deno-esbuilder/release/v0.3.0/plugins/loaderOverride/types/"
+    }
+}
