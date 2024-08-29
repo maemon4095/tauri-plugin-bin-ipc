@@ -10,7 +10,7 @@ pub use crate::{
 pub use bin_ipc_core::{BinIpcHandler, BoxError};
 pub use bin_ipc_util::{from_app_handle_proxy, FromAppHandle};
 pub use rmp_serde::{
-    decode::Error as MsgpackDecodeError, to_vec as encode_to_vec,
+    decode::Error as MsgpackDecodeError, to_vec_named as encode_to_vec,
     Deserializer as MsgpackDeserializer,
 };
 pub use serde::{
