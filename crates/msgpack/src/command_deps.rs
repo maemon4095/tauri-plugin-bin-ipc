@@ -1,12 +1,14 @@
 pub use crate::{
-    de::{CommandArgDeserializer, DeserializeProxy},
+    de::deserialize_proxy,
     error::{MissingArgumentError, NoSuchCommandError},
     flatten_join_handle::FlattenJoinHandle,
     or_future::OrFuture,
-    wrap_result::WrapResult,
+    wrap_result::wrap_result,
     HandleResult, TauriPluginBinIpcMessagePackCommand,
 };
+
 pub use bin_ipc_core::{BinIpcHandler, BoxError};
+pub use bin_ipc_util::{from_app_handle_proxy, FromAppHandle};
 pub use rmp_serde::{
     decode::Error as MsgpackDecodeError, to_vec as encode_to_vec,
     Deserializer as MsgpackDeserializer,

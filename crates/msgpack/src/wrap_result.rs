@@ -1,6 +1,10 @@
 use std::marker::PhantomData;
 
-pub struct WrapResult<T>(pub PhantomData<T>);
+pub fn wrap_result<T>() -> WrapResult<T> {
+    WrapResult(PhantomData)
+}
+
+pub struct WrapResult<T>(PhantomData<T>);
 
 impl<T, E> WrapResult<Result<T, E>> {
     pub fn wrap(&self, value: Result<T, E>) -> Result<T, E> {

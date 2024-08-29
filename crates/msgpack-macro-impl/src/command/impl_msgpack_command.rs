@@ -5,10 +5,11 @@ use super::CommandGenerationContext;
 
 struct CommandArgGenerationContext<'a> {
     command_name: &'a syn::Ident,
-    runtime_generic_param: &'a syn::Ident,
+    runtime_ty: &'a syn::Ident,
     command_arg_name: syn::Ident,
     return_type: &'a syn::Type,
     deps_path: &'a syn::Path,
+    ident_suffix: &'static str,
     arg_names: Vec<String>,
     fields: Vec<syn::Ident>,
     types: Vec<syn::Type>,
@@ -24,7 +25,7 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
     let command_arg_names = &ctx.arg_names;
     let command_arg_fields = &ctx.fields;
     let deps = &ctx.deps_path;
-    let generic_arg = &ctx.runtime_generic_param;
+    let runtime_ty = &ctx.runtime_ty;
     let return_ty = &ctx.return_type;
 
     let command_arg_name = &ctx.command_arg_name;
@@ -33,12 +34,12 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
     let map_err = quote!(map_err(|e| #deps::Box::new(e) as #deps::BoxError));
 
     quote! {
-        impl<#generic_arg: #deps::Runtime> #deps::TauriPluginBinIpcMessagePackCommand<#generic_arg> for #command_name {
+        impl<#runtime_ty: #deps::Runtime> #deps::TauriPluginBinIpcMessagePackCommand<#runtime_ty> for #command_name {
             const NAME: &'static #deps::str = #command_name_str;
 
             fn handle(
                 &self,
-                app: &#deps::AppHandle<#generic_arg>,
+                app: &#deps::AppHandle<#runtime_ty>,
                 payload: &[#deps::u8],
             ) -> impl 'static + #deps::Future<Output = #deps::HandleResult> + #deps::Send {
                 #command_args_def
@@ -58,7 +59,7 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
                         ),*
                     ).await.#map_err?;
 
-                    let response = #deps::WrapResult::<#return_ty>(#deps::PhantomData).wrap(result).#map_err?;
+                    let response = #deps::wrap_result::<#return_ty>().wrap(result).#map_err?;
 
                     #deps::Ok(#deps::encode_to_vec(&response).#map_err?)
                 })())
@@ -74,58 +75,55 @@ fn gen_command_args(ctx: &CommandArgGenerationContext) -> TokenStream {
     let command_arg_fields = &ctx.fields;
     let command_arg_types = &ctx.types;
     let deps = &ctx.deps_path;
-    let generic_arg = &ctx.runtime_generic_param;
+    let runtime_ty = &ctx.runtime_ty;
     let command_arg_name = &ctx.command_arg_name;
+    let deserializer_ty = format_ident!("__D_{}", ctx.ident_suffix);
+    let map_access_ty = format_ident!("__A_{}", ctx.ident_suffix);
 
     quote! {
-        struct #command_arg_name<#generic_arg: #deps::Runtime> {
-            __marker: #deps::PhantomData<#generic_arg>,
+        struct #command_arg_name<#runtime_ty: #deps::Runtime> {
+            __marker: #deps::PhantomData<#runtime_ty>,
             #(
                 #command_arg_fields : #deps::Option<#command_arg_types>
             ),*
         }
 
-        impl<#generic_arg: #deps::Runtime> #command_arg_name<#generic_arg> {
+        impl<#runtime_ty: #deps::Runtime> #command_arg_name<#runtime_ty> {
             fn deserialize(
-                app: &#deps::AppHandle<#generic_arg>,
+                app: &#deps::AppHandle<#runtime_ty>,
                 payload: &[#deps::u8],
             ) -> Result<Self, #deps::MsgpackDecodeError> {
-                struct Visitor<'a, #generic_arg: #deps::Runtime>(&'a #deps::AppHandle<#generic_arg>);
+                struct Visitor<'a, #runtime_ty: #deps::Runtime>(&'a #deps::AppHandle<#runtime_ty>);
 
-                impl<'de, #generic_arg: #deps::Runtime> #deps::Visitor<'de> for Visitor<'de, #generic_arg> {
-                    type Value = #command_arg_name<#generic_arg>;
+                impl<'de, #runtime_ty: #deps::Runtime> #deps::Visitor<'de> for Visitor<'de, #runtime_ty> {
+                    type Value = #command_arg_name<#runtime_ty>;
 
                     fn expecting(&self, formatter: &mut #deps::StdFormatter) -> #deps::StdFmtResult {
                         formatter.write_str(#visitor_expecting)
                     }
 
-                    fn visit_map<__A>(self, mut map: __A) -> #deps::Result<Self::Value, __A::Error>
+                    fn visit_map<#map_access_ty>(self, mut map: #map_access_ty) -> #deps::Result<Self::Value, #map_access_ty::Error>
                     where
-                        __A: #deps::MapAccess<'de>,
+                        #map_access_ty: #deps::MapAccess<'de>,
                     {
                         let mut command_args = #command_arg_name {
                             __marker: #deps::PhantomData,
-                            #(#command_arg_fields: #deps::None),*
+                            #(#command_arg_fields: #deps::from_app_handle_proxy::<#runtime_ty, #command_arg_types>().from_app_handle(self.0)),*
                         };
 
                         while let #deps::Some(k) = map.next_key::<&#deps::str>()? {
                             match k {
                                 #(
                                     #command_arg_names => {
-                                        struct Proxy<'a, #generic_arg: #deps::Runtime>(&'a #deps::AppHandle<#generic_arg>);
-                                        impl<'de, #generic_arg: #deps::Runtime> #deps::DeserializeSeed<'de> for Proxy<'de, #generic_arg> {
+                                        struct Proxy<'a, #runtime_ty: #deps::Runtime>(&'a #deps::AppHandle<#runtime_ty>);
+                                        impl<'de, #runtime_ty: #deps::Runtime> #deps::DeserializeSeed<'de> for Proxy<'de, #runtime_ty> {
                                             type Value = #command_arg_types;
 
-                                            fn deserialize<__D>(self, de: __D) -> #deps::Result<Self::Value, __D::Error>
+                                            fn deserialize<#deserializer_ty>(self, de: #deserializer_ty) -> #deps::Result<Self::Value, #deserializer_ty::Error>
                                             where
-                                                __D: #deps::Deserializer<'de>,
+                                                #deserializer_ty: #deps::Deserializer<'de>,
                                             {
-                                                let de = #deps::CommandArgDeserializer {
-                                                    app_handle: self.0,
-                                                    de,
-                                                };
-
-                                                #deps::DeserializeProxy::<#generic_arg, #command_arg_types>(#deps::PhantomData).deserialize(de)
+                                                #deps::deserialize_proxy::<#runtime_ty, #command_arg_types>().deserialize(de)
                                             }
                                         }
 
@@ -134,7 +132,7 @@ fn gen_command_args(ctx: &CommandArgGenerationContext) -> TokenStream {
                                     }
                                 )*
                                 _ => {
-                                    return #deps::Err(<__A::Error as #deps::SerdeError>::unknown_field(
+                                    return #deps::Err(<#map_access_ty::Error as #deps::SerdeError>::unknown_field(
                                         k,
                                         &[#(#command_arg_names),*],
                                     ))
@@ -179,10 +177,11 @@ impl<'a> CommandArgGenerationContext<'a> {
         };
 
         let CommandGenerationContext {
-            runtime_generic_param,
+            runtime_ty,
             command_name,
             deps_path,
             return_type,
+            ident_suffix,
             ..
         } = ctx;
         let command_arg_name = format_ident!("__CommandArgs_{}", ctx.ident_suffix);
@@ -196,7 +195,8 @@ impl<'a> CommandArgGenerationContext<'a> {
         }
 
         Ok(Self {
-            runtime_generic_param,
+            ident_suffix,
+            runtime_ty,
             command_name,
             deps_path,
             return_type,

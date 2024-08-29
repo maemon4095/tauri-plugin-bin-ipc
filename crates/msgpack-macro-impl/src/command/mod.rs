@@ -35,7 +35,7 @@ pub fn bin_command(_attr: TokenStream, body: TokenStream) -> TokenStream {
 struct CommandGenerationContext {
     pub item_fn: syn::ItemFn,
     pub ident_suffix: &'static str,
-    pub runtime_generic_param: syn::Ident,
+    pub runtime_ty: syn::Ident,
     pub command_name: syn::Ident,
     pub deps_path: syn::Path,
     pub return_type: syn::Type,
@@ -65,7 +65,7 @@ impl CommandGenerationContext {
             item_fn,
             command_name,
             deps_path,
-            runtime_generic_param,
+            runtime_ty: runtime_generic_param,
             return_type,
         })
     }

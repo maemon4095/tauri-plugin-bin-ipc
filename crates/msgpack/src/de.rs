@@ -1,11 +1,6 @@
 use std::marker::PhantomData;
 use tauri::AppHandle;
 
-pub struct CommandArgDeserializer<'de, R: tauri::Runtime, D: serde::Deserializer<'de>> {
-    pub app_handle: &'de AppHandle<R>,
-    pub de: D,
-}
-
 /// AppHandleは外部クレートの型なので、tauri::command::CommandArgのようなtrait boundを使った処理の切り替えはできない。
 ///
 /// HACK: methodルックアップの優先度を利用して疑似的にoverrideを実現している。
@@ -15,13 +10,14 @@ pub struct CommandArgDeserializer<'de, R: tauri::Runtime, D: serde::Deserializer
 /// SEE: https://doc.rust-lang.org/reference/expressions/method-call-expr.html
 //
 
-pub struct DeserializeProxy<R: tauri::Runtime, T>(pub PhantomData<(R, T)>);
+pub fn deserialize_proxy<R: tauri::Runtime, T>() -> DeserializeProxy<R, T> {
+    DeserializeProxy(PhantomData)
+}
+
+pub struct DeserializeProxy<R: tauri::Runtime, T>(PhantomData<(R, T)>);
 impl<R: tauri::Runtime, T: serde::de::DeserializeOwned> DeserializeProxy<R, T> {
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
-        &self,
-        de: CommandArgDeserializer<'de, R, D>,
-    ) -> Result<T, D::Error> {
-        T::deserialize(de.de)
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(&self, de: D) -> Result<T, D::Error> {
+        T::deserialize(de)
     }
 }
 
@@ -38,8 +34,10 @@ pub struct DeserializeAppHandleProxy<R: tauri::Runtime, T>(PhantomData<(R, T)>);
 impl<R: tauri::Runtime> DeserializeAppHandleProxy<R, AppHandle<R>> {
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(
         &self,
-        de: CommandArgDeserializer<'de, R, D>,
+        _de: D,
     ) -> Result<AppHandle<R>, D::Error> {
-        Ok(de.app_handle.clone())
+        Err(<D::Error as serde::de::Error>::custom(
+            crate::error::ShouldNotBeDeserlialized::<AppHandle<R>>::new(),
+        ))
     }
 }

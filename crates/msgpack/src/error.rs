@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 #[derive(Debug)]
 pub struct MissingArgumentError {
     pub command_name: &'static str,
@@ -28,3 +30,31 @@ impl std::fmt::Display for NoSuchCommandError {
 }
 
 impl std::error::Error for NoSuchCommandError {}
+
+pub struct ShouldNotBeDeserlialized<T>(PhantomData<T>);
+
+impl<T> ShouldNotBeDeserlialized<T> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T> std::fmt::Debug for ShouldNotBeDeserlialized<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ShouldNotBeDeserlialized")
+            .field(&std::any::type_name::<T>())
+            .finish()
+    }
+}
+
+impl<T> std::fmt::Display for ShouldNotBeDeserlialized<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "The type `{}` should not be deserlialized.",
+            std::any::type_name::<T>()
+        )
+    }
+}
+
+impl<T> std::error::Error for ShouldNotBeDeserlialized<T> {}

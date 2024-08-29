@@ -1,0 +1,9 @@
+[package]
+name = "tauri-plugin-bin-ipc-util"
+rust-version.workspace = true
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+
+[dependencies]
+tauri.workspace = true
