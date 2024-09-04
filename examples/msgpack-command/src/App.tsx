@@ -42,7 +42,6 @@ export default function App() {
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
-          invoke("bin-ipc", "greet", {});
           greet();
         }}
       >
