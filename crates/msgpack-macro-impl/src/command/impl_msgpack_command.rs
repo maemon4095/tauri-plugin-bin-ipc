@@ -44,7 +44,7 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
 
                 let mut command_args = match #command_arg_name::deserialize(&app, &payload) {
                     #deps::Ok(v) => v,
-                    #deps::Err(e) => return #deps::OrFuture::F0(#deps::ready_future(#deps::Err(e.into())))
+                    #deps::Err(e) => return #deps::OrFuture::F0(#deps::ready_future(#deps::Err(#deps::BinIpcError::new_reportable(e))))
                 };
 
                 #deps::OrFuture::F1((move || async move {
@@ -53,7 +53,7 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
                             command_args.#command_arg_fields.take().ok_or(#deps::MissingArgumentError {
                                 command_name: #command_name_str,
                                 arg_name: #command_arg_names
-                            })?
+                            }).map_err(#deps::BinIpcError::new_reportable)?
                         ),*
                     ).await?;
 
