@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct BinIpcError {
     is_reportable: bool,
     boxed: Box<dyn std::error::Error + Send>,

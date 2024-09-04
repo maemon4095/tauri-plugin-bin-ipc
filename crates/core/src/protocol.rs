@@ -6,7 +6,6 @@ use crate::{
 };
 use std::sync::Mutex;
 use tauri::{
-    api::http::StatusCode,
     http::{
         header::{self, HeaderValue},
         method::Method,
@@ -74,7 +73,7 @@ pub fn create<R: tauri::Runtime, H: BinIpcHandler<R>>(
                     }
                 });
 
-                Ok(create_json_response(&id))
+                Ok(create_json_response(&id, BinIpcStatus::Ok))
             }
             RequestUrl::IpcPoll(id) => {
                 let state = app.state::<BinIpcState>();
@@ -88,33 +87,23 @@ pub fn create<R: tauri::Runtime, H: BinIpcHandler<R>>(
                     Some(r) => {
                         let _ = state.sessions.delete(id);
                         match r {
-                            Ok(v) => Ok(create_response(v, StatusCode::OK)),
+                            Ok(v) => Ok(create_response(v, BinIpcStatus::Ok)),
                             Err(e) => create_error_result(e),
                         }
                     }
-                    None => Ok(create_response(Vec::new(), StatusCode::ACCEPTED)),
+                    None => Ok(create_response(Vec::new(), BinIpcStatus::Pending)),
                 }
             }
         }
     }
 }
 
-fn create_json_response<T: serde::Serialize>(v: &T) -> tauri::http::Response {
-    let mut res = create_response(serde_json::to_vec(v).unwrap(), StatusCode::OK);
+fn create_json_response<T: serde::Serialize>(v: &T, status: BinIpcStatus) -> tauri::http::Response {
+    let mut res = create_response(serde_json::to_vec(v).unwrap(), status);
     res.headers_mut().append(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/json; charset=utf-8"),
     );
-    res
-}
-
-fn create_response(buf: Vec<u8>, status: StatusCode) -> tauri::http::Response {
-    let mut res = Response::new(buf);
-    res.headers_mut().append(
-        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-        HeaderValue::from_static("*"),
-    );
-    res.set_status(status);
     res
 }
 
@@ -126,16 +115,46 @@ fn create_error_result(
     }
 
     let e = e.into_inner();
-    let mut res = create_response(
-        serde_json::to_vec(&e.to_string()).unwrap(),
-        StatusCode::INTERNAL_SERVER_ERROR,
-    );
-    res.headers_mut().append(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json; charset=utf-8"),
-    );
-    Ok(res)
+    Ok(create_response(
+        e.to_string().into_bytes(),
+        BinIpcStatus::Error,
+    ))
 }
+
+fn create_response(buf: Vec<u8>, status: BinIpcStatus) -> tauri::http::Response {
+    let mut res = Response::new(buf);
+
+    let headers = res.headers_mut();
+    headers.append(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    headers.append(
+        header::ACCESS_CONTROL_EXPOSE_HEADERS,
+        HeaderValue::from_static(BIN_IPC_STATUS),
+    );
+    headers.append(BIN_IPC_STATUS, status.into());
+
+    res
+}
+
+enum BinIpcStatus {
+    Ok,
+    Pending,
+    Error,
+}
+
+impl Into<HeaderValue> for BinIpcStatus {
+    fn into(self) -> HeaderValue {
+        match self {
+            BinIpcStatus::Ok => HeaderValue::from_static("ok"),
+            BinIpcStatus::Pending => HeaderValue::from_static("pending"),
+            BinIpcStatus::Error => HeaderValue::from_static("error"),
+        }
+    }
+}
+
+const BIN_IPC_STATUS: &str = "bin-ipc-status";
 
 struct Session {
     result: Mutex<Option<Result<Vec<u8>, BinIpcError>>>,

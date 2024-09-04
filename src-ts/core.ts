@@ -7,6 +7,8 @@ const listeners = {} as {
     [id: number]: BinIpcEventListener;
 };
 
+const HEADER_BIN_IPC_STATUS = "bin-ipc-status";
+
 await listen<number>("bin-ipc:ready", (e) => {
     const id = e.payload;
     listeners[id]?.();
@@ -28,20 +30,45 @@ async function spawn(
     const res = await fetch(`${origin}/ipc/spawn/${command}`, {
         method: "POST",
         body: payload,
+        cache: "no-cache",
     });
 
-    const id = await res.json();
-    return id;
+    const status = res.headers.get(HEADER_BIN_IPC_STATUS);
+
+    switch (status) {
+        case "ok": {
+            const id = await res.json();
+            return id;
+        }
+
+        case "error": {
+            throw new Error(await res.text());
+        }
+
+        default: {
+            throw_unknown_status();
+        }
+    }
 }
 
 async function poll(origin: string, id: number): Promise<Uint8Array | null> {
     const res = await fetch(`${origin}/ipc/poll/${id}`, {
         method: "POST",
+        cache: "no-cache",
     });
-    if (res.status === 202) {
-        return null;
+
+    const status = res.headers.get(HEADER_BIN_IPC_STATUS);
+
+    switch (status) {
+        case "ok":
+            return await bytes(res.body!);
+        case "pending":
+            return null;
+        case "error":
+            throw new Error(await res.text());
+        default:
+            throw_unknown_status();
     }
-    return await bytes(res.body!);
 }
 
 export async function invoke_raw(
@@ -73,4 +100,8 @@ export async function invoke_raw(
                 reject(e);
             });
     }
+}
+
+function throw_unknown_status(): never {
+    throw new Error("server responsed with unknown status.");
 }
