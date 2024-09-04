@@ -2,15 +2,15 @@ use std::future::Future;
 
 use tauri::AppHandle;
 
-use crate::BoxError;
+use crate::error::BinIpcError;
 
 pub trait BinIpcHandler<R: tauri::Runtime>: 'static + Send + Sync {
-    type Future: Future<Output = Result<Vec<u8>, BoxError>> + 'static + Send;
+    type Future: Future<Output = Result<Vec<u8>, BinIpcError>> + 'static + Send;
 
     fn handle(
         &self,
         app: &AppHandle<R>,
         name: &str,
         payload: &[u8],
-    ) -> Result<Self::Future, BoxError>;
+    ) -> Result<Self::Future, BinIpcError>;
 }

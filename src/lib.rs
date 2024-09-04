@@ -1,4 +1,4 @@
-pub use core::{BinIpcHandler, BoxError, BuilderBinIpcExtension, PluginBuilderBinIpcExtension};
+pub use core::{BinIpcError, BinIpcHandler, BuilderBinIpcExtension, PluginBuilderBinIpcExtension};
 #[cfg(feature = "msgpack")]
 pub use msgpack;
 #[cfg(feature = "default-msgpack")]

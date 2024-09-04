@@ -22,7 +22,7 @@ pub fn generate_bin_handler(args: TokenStream) -> TokenStream {
                     #deps::Vec<#deps::u8>
                 >;
 
-                fn handle(&self, app: &#deps::AppHandle<R>, name: &#deps::str, payload: &[#deps::u8]) -> #deps::Result<Self::Future, #deps::BoxError> {
+                fn handle(&self, app: &#deps::AppHandle<R>, name: &#deps::str, payload: &[#deps::u8]) -> #deps::Result<Self::Future, #deps::BinIpcError> {
                     match name {
                         #(
                             <#commands as #deps::TauriPluginBinIpcMessagePackCommand<R>>::NAME => #deps::Ok(#deps::spawn(
@@ -33,7 +33,7 @@ pub fn generate_bin_handler(args: TokenStream) -> TokenStream {
                                 )
                             ).into()),
                         )*
-                        _ => #deps::Err(#deps::Box::new(#deps::NoSuchCommandError(name.to_string())) as #deps::BoxError)
+                        _ => #deps::Err(#deps::BinIpcError::new_reportable(#deps::NoSuchCommandError(name.to_string())))
                     }
                 }
             }

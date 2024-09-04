@@ -7,7 +7,7 @@ pub use crate::{
     HandleResult, TauriPluginBinIpcMessagePackCommand,
 };
 
-pub use bin_ipc_core::{BinIpcHandler, BoxError};
+pub use bin_ipc_core::{BinIpcError, BinIpcHandler};
 pub use bin_ipc_util::{from_app_handle_proxy, FromAppHandle};
 pub use rmp_serde::{
     decode::Error as MsgpackDecodeError, to_vec_named as encode_to_vec,

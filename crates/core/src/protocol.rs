@@ -2,7 +2,7 @@ use crate::{
     handler::BinIpcHandler,
     secure_arena::{SecureArena, SecureArenaId},
     util::{declare_error, AppHandleExt},
-    BoxError,
+    BinIpcError,
 };
 use std::sync::Mutex;
 use tauri::{
@@ -53,7 +53,7 @@ pub fn create<R: tauri::Runtime, H: BinIpcHandler<R>>(
 
                 let task = match handler.handle(&app, command, req.body()) {
                     Ok(v) => v,
-                    Err(e) => return Err(e),
+                    Err(e) => return create_error_result(e),
                 };
                 tauri::async_runtime::spawn({
                     let app = app.clone();
@@ -89,7 +89,7 @@ pub fn create<R: tauri::Runtime, H: BinIpcHandler<R>>(
                         let _ = state.sessions.delete(id);
                         match r {
                             Ok(v) => Ok(create_response(v, StatusCode::OK)),
-                            Err(e) => Err(e),
+                            Err(e) => create_error_result(e),
                         }
                     }
                     None => Ok(create_response(Vec::new(), StatusCode::ACCEPTED)),
@@ -118,8 +118,27 @@ fn create_response(buf: Vec<u8>, status: StatusCode) -> tauri::http::Response {
     res
 }
 
+fn create_error_result(
+    e: BinIpcError,
+) -> Result<tauri::http::Response, Box<dyn std::error::Error>> {
+    if !e.is_reportable() {
+        return Err(e.into_inner());
+    }
+
+    let e = e.into_inner();
+    let mut res = create_response(
+        serde_json::to_vec(&e.to_string()).unwrap(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+    );
+    res.headers_mut().append(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json; charset=utf-8"),
+    );
+    Ok(res)
+}
+
 struct Session {
-    result: Mutex<Option<Result<Vec<u8>, BoxError>>>,
+    result: Mutex<Option<Result<Vec<u8>, BinIpcError>>>,
 }
 
 struct BinIpcState {

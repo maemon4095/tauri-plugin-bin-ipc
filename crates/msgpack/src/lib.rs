@@ -6,11 +6,11 @@ mod flatten_join_handle;
 mod or_future;
 mod wrap_result;
 
-use bin_ipc_core::BoxError;
+use bin_ipc_core::BinIpcError;
 use std::future::Future;
 
 pub use msgpack_macro::{bin_command, generate_bin_handler};
-pub type HandleResult = Result<Vec<u8>, BoxError>;
+pub type HandleResult = Result<Vec<u8>, BinIpcError>;
 
 pub trait TauriPluginBinIpcMessagePackCommand<R: tauri::Runtime>: 'static + Send + Sync {
     const NAME: &'static str;

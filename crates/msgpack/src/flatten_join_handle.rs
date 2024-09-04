@@ -1,13 +1,13 @@
 use tauri::async_runtime::JoinHandle;
 
-use crate::BoxError;
+use crate::BinIpcError;
 
 pub struct FlattenJoinHandle<T>(
-    <JoinHandle<Result<T, BoxError>> as std::future::IntoFuture>::IntoFuture,
+    <JoinHandle<Result<T, BinIpcError>> as std::future::IntoFuture>::IntoFuture,
 );
 
 impl<T> std::future::Future for FlattenJoinHandle<T> {
-    type Output = Result<T, BoxError>;
+    type Output = Result<T, BinIpcError>;
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
@@ -18,13 +18,13 @@ impl<T> std::future::Future for FlattenJoinHandle<T> {
             .map(|e| match e {
                 Ok(Ok(v)) => Ok(v),
                 Ok(Err(e)) => Err(e),
-                Err(e) => Err(Box::new(e) as BoxError),
+                Err(e) => Err(BinIpcError::from(e)),
             })
     }
 }
 
-impl<T> From<JoinHandle<Result<T, BoxError>>> for FlattenJoinHandle<T> {
-    fn from(value: JoinHandle<Result<T, BoxError>>) -> Self {
+impl<T> From<JoinHandle<Result<T, BinIpcError>>> for FlattenJoinHandle<T> {
+    fn from(value: JoinHandle<Result<T, BinIpcError>>) -> Self {
         Self(value)
     }
 }

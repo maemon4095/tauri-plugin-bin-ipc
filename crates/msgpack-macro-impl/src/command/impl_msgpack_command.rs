@@ -31,8 +31,6 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
     let command_arg_name = &ctx.command_arg_name;
     let command_args_def = gen_command_args(&ctx);
 
-    let map_err = quote!(map_err(|e| #deps::Box::new(e) as #deps::BoxError));
-
     quote! {
         impl<#runtime_ty: #deps::Runtime> #deps::TauriPluginBinIpcMessagePackCommand<#runtime_ty> for #command_name {
             const NAME: &'static #deps::str = #command_name_str;
@@ -46,7 +44,7 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
 
                 let mut command_args = match #command_arg_name::deserialize(&app, &payload) {
                     #deps::Ok(v) => v,
-                    #deps::Err(e) => return #deps::OrFuture::F0(#deps::ready_future(#deps::Err(#deps::Box::new(e) as #deps::BoxError)))
+                    #deps::Err(e) => return #deps::OrFuture::F0(#deps::ready_future(#deps::Err(e.into())))
                 };
 
                 #deps::OrFuture::F1((move || async move {
@@ -55,13 +53,13 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
                             command_args.#command_arg_fields.take().ok_or(#deps::MissingArgumentError {
                                 command_name: #command_name_str,
                                 arg_name: #command_arg_names
-                            }).#map_err?
+                            })?
                         ),*
-                    ).await.#map_err?;
+                    ).await?;
 
-                    let response = #deps::wrap_result::<#return_ty>().wrap(result).#map_err?;
+                    let response = #deps::wrap_result::<#return_ty>().wrap(result)?;
 
-                    #deps::Ok(#deps::encode_to_vec(&response).#map_err?)
+                    #deps::Ok(#deps::encode_to_vec(&response)?)
                 })())
             }
         }
