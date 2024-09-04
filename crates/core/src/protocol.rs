@@ -4,7 +4,7 @@ use crate::{
     util::{declare_error, AppHandleExt},
     BinIpcError,
 };
-use std::sync::Mutex;
+use std::{borrow::Cow, sync::Mutex};
 use tauri::{
     http::{
         header::{self, HeaderValue},
@@ -50,7 +50,7 @@ pub fn create<R: tauri::Runtime, H: BinIpcHandler<R>>(
                     return Err(TooManyRequests.into());
                 };
 
-                let task = match handler.handle(&app, command, req.body()) {
+                let task = match handler.handle(&app, &command, req.body()) {
                     Ok(v) => v,
                     Err(e) => return create_error_result(e),
                 };
@@ -174,7 +174,7 @@ impl BinIpcState {
 
 enum RequestUrl<'a> {
     // [scheme]://localhost/ipc/spawn/[command]
-    IpcSpawn(&'a str),
+    IpcSpawn(Cow<'a, str>),
     // [scheme]://localhost/ipc/poll/[id]
     IpcPoll(SecureArenaId),
 }
@@ -207,7 +207,11 @@ impl RequestUrlParser {
                 };
 
                 match op {
-                    "spawn" => Ok(RequestUrl::IpcSpawn(rest)),
+                    "spawn" => Ok(RequestUrl::IpcSpawn(
+                        percent_encoding::percent_decode_str(rest)
+                            .decode_utf8()
+                            .map_err(|_| ())?,
+                    )),
                     "poll" => {
                         let Ok(id) = SecureArenaId::from_str_radix(rest, 10) else {
                             return Err(());

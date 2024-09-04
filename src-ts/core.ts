@@ -22,6 +22,14 @@ function unregister(id: number) {
     delete listeners[id];
 }
 
+function escapeCommand(command: string) {
+    return encodeURIComponent(command);
+}
+
+function throw_unknown_status(): never {
+    throw new Error("server responsed with unknown status.");
+}
+
 async function spawn(
     origin: string,
     command: string,
@@ -77,6 +85,7 @@ export async function invoke_raw(
     payload: Uint8Array,
 ): Promise<Uint8Array> {
     const origin = await resolveCustomSchemeOrigin(name);
+    command = escapeCommand(command);
     const id = await spawn(origin, command, payload);
     return await new Promise((resolve, reject) => {
         register(id, () => {
@@ -100,8 +109,4 @@ export async function invoke_raw(
                 reject(e);
             });
     }
-}
-
-function throw_unknown_status(): never {
-    throw new Error("server responsed with unknown status.");
 }

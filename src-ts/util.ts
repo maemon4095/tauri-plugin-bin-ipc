@@ -1,6 +1,11 @@
 import { type as ostype } from "npm:@tauri-apps/api/os";
 
+const SCHEME_PATTERN = /[A-Za-z]([A-Za-z0-9+-.]*)/;
+
 export async function resolveCustomSchemeOrigin(scheme: string) {
+    if (!SCHEME_PATTERN.test(scheme)) {
+        throw new Error("invalid scheme");
+    }
     const type = await ostype();
     switch (type) {
         case "Darwin":
