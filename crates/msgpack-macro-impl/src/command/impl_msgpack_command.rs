@@ -32,6 +32,7 @@ pub fn gen(ctx: &CommandGenerationContext) -> TokenStream {
     let command_args_def = gen_command_args(&ctx);
 
     quote! {
+        #[allow(non_camel_case_types)]
         impl<#runtime_ty: #deps::Runtime> #deps::TauriPluginBinIpcMessagePackCommand<#runtime_ty> for #command_name {
             const NAME: &'static #deps::str = #command_name_str;
 
